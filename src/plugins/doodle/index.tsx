@@ -5,10 +5,10 @@ import type { EditorPlugin, PluginOverlayProps, PluginPanelProps } from '../../c
 // ─── Module-level brush settings (overlay reads live values) ─────────────────
 
 export const doodleSettings = new Map<HTMLCanvasElement, {
-  color: string; size: number; opacity: number; eraser: boolean
+  color: string; size: number; opacity: number; hardness: number; eraser: boolean
 }>()
 
-const DEFAULT_SETTINGS = { color: '#ff0000', size: 8, opacity: 1, eraser: false }
+const DEFAULT_SETTINGS = { color: '#ff0000', size: 8, opacity: 1, hardness: 100, eraser: false }
 
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
@@ -48,8 +48,10 @@ function DoodleOverlay({ context, containerRef }: PluginOverlayProps) {
     if (!g) return
     const s  = settings()
     const op: GlobalCompositeOperation = s.eraser ? 'destination-out' : 'source-over'
-    g.globalAlpha            = s.eraser ? 1 : s.opacity
+    g.globalAlpha              = s.eraser ? 1 : s.opacity
     g.globalCompositeOperation = op
+    const blurPx = s.eraser ? 0 : ((100 - s.hardness) / 100) * s.size * 0.4
+    if (blurPx > 0) g.filter = `blur(${blurPx}px)`
     if (from) {
       g.beginPath(); g.moveTo(from.x, from.y); g.lineTo(to.x, to.y)
       g.strokeStyle = s.color; g.lineWidth = s.size
@@ -58,7 +60,8 @@ function DoodleOverlay({ context, containerRef }: PluginOverlayProps) {
       g.beginPath(); g.arc(to.x, to.y, s.size / 2, 0, Math.PI * 2)
       g.fillStyle = s.color; g.fill()
     }
-    g.globalAlpha            = 1
+    if (blurPx > 0) g.filter = 'none'
+    g.globalAlpha              = 1
     g.globalCompositeOperation = 'source-over'
     context.compositeToCanvas()
   }
@@ -96,15 +99,22 @@ function DoodleOverlay({ context, containerRef }: PluginOverlayProps) {
 
 // ─── Panel (brush settings only — layers are in the Layers panel) ─────────────
 
+const SWATCHES = [
+  '#000000', '#ffffff', '#808080', '#ff0000',
+  '#ff8800', '#ffff00', '#00cc44', '#0088ff',
+  '#8800ff', '#ff00cc', '#00cccc', '#ff6666',
+]
+
 function DoodlePanel({ context }: PluginPanelProps) {
-  const [color,   setColor]   = useState(DEFAULT_SETTINGS.color)
-  const [size,    setSize]    = useState(DEFAULT_SETTINGS.size)
-  const [opacity, setOpacity] = useState(100)
-  const [eraser,  setEraser]  = useState(false)
+  const [color,    setColor]    = useState(DEFAULT_SETTINGS.color)
+  const [size,     setSize]     = useState(DEFAULT_SETTINGS.size)
+  const [opacity,  setOpacity]  = useState(100)
+  const [hardness, setHardness] = useState(DEFAULT_SETTINGS.hardness)
+  const [eraser,   setEraser]   = useState(false)
 
   useEffect(() => {
-    doodleSettings.set(context.canvas, { color, size, opacity: opacity / 100, eraser })
-  }, [color, size, opacity, eraser, context.canvas])
+    doodleSettings.set(context.canvas, { color, size, opacity: opacity / 100, hardness, eraser })
+  }, [color, size, opacity, hardness, eraser, context.canvas])
 
   const sl = 'w-full accent-violet-500'
 
@@ -112,27 +122,48 @@ function DoodlePanel({ context }: PluginPanelProps) {
     <div className="p-3 space-y-3 text-xs">
       <p className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium">Brush</p>
 
-      <div className="flex items-center gap-2">
-        <input type="color" value={color} onChange={e => setColor(e.target.value)}
-          className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent flex-none" />
-        <input value={color} onChange={e => setColor(e.target.value)} maxLength={7}
-          className="w-24 bg-neutral-800 border border-neutral-700 rounded px-1.5 py-0.5 font-mono text-neutral-300 focus:outline-none focus:border-violet-500" />
-        <div className="flex flex-1 rounded overflow-hidden border border-neutral-700">
-          <button onClick={() => setEraser(false)}
-            className={`flex-1 py-1 flex items-center justify-center gap-1 text-[10px] ${!eraser ? 'bg-violet-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'}`}>
-            <Pencil size={9} />Pen
-          </button>
-          <button onClick={() => setEraser(true)}
-            className={`flex-1 py-1 flex items-center justify-center gap-1 text-[10px] ${eraser ? 'bg-violet-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'}`}>
-            <Eraser size={9} />Erase
-          </button>
-        </div>
+      <div className="flex rounded overflow-hidden border border-neutral-700">
+        <button onClick={() => setEraser(false)}
+          className={`flex-1 py-1.5 flex items-center justify-center gap-1 text-[10px] ${!eraser ? 'bg-violet-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'}`}>
+          <Pencil size={9} />Pen
+        </button>
+        <button onClick={() => setEraser(true)}
+          className={`flex-1 py-1.5 flex items-center justify-center gap-1 text-[10px] ${eraser ? 'bg-violet-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'}`}>
+          <Eraser size={9} />Erase
+        </button>
       </div>
+
+      {!eraser && (
+        <div>
+          <p className="text-[10px] text-neutral-500 mb-1.5">Color</p>
+          <div className="flex items-center gap-2 mb-2">
+            <input type="color" value={color} onChange={e => setColor(e.target.value)}
+              className="w-8 h-8 rounded cursor-pointer border border-neutral-600 bg-transparent flex-none p-0.5" />
+            <input value={color} onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setColor(e.target.value) }}
+              maxLength={7}
+              className="flex-1 bg-neutral-800 border border-neutral-700 rounded px-1.5 py-1 font-mono text-neutral-300 focus:outline-none focus:border-violet-500" />
+          </div>
+          <div className="grid grid-cols-6 gap-1">
+            {SWATCHES.map(c => (
+              <button key={c} title={c} onClick={() => setColor(c)}
+                style={{ backgroundColor: c }}
+                className={`h-5 rounded border transition-transform hover:scale-110 ${color === c ? 'border-violet-400 scale-110' : 'border-neutral-600'}`} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="flex justify-between text-neutral-400 mb-1"><span>Size</span><span>{size}px</span></div>
         <input type="range" min={1} max={120} value={size} onChange={e => setSize(+e.target.value)} className={sl} />
       </div>
+
+      {!eraser && (
+        <div>
+          <div className="flex justify-between text-neutral-400 mb-1"><span>Hardness</span><span>{hardness}%</span></div>
+          <input type="range" min={0} max={100} value={hardness} onChange={e => setHardness(+e.target.value)} className={sl} />
+        </div>
+      )}
 
       <div>
         <div className="flex justify-between text-neutral-400 mb-1"><span>Opacity</span><span>{opacity}%</span></div>
