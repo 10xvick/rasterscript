@@ -1,0 +1,64 @@
+name: Build and Deploy to GitHub Pages
+
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout rasterscript repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Checkout main site repo
+        uses: actions/checkout@v4
+        with:
+          repository: 10xvick/10xvick.github.io
+          path: main-site
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create deployment directory
+        run: mkdir -p main-site/tools/image/rasterscript
+
+      - name: Copy built files
+        run: cp -r dist/* main-site/tools/image/rasterscript/
+
+      - name: Configure git
+        working-directory: main-site
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push changes
+        working-directory: main-site
+        run: |
+          git add tools/image/rasterscript/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Deploy rasterscript build"
+            git push
+          fi
