@@ -41,7 +41,7 @@ jobs:
         with:
           repository: 10xvick/10xvick.github.io
           path: main-site
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.DEPLOY_TOKEN }}
 
       - name: Create deployment directory
         run: mkdir -p main-site/tools/image/rasterscript
