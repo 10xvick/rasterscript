@@ -86,7 +86,7 @@ export function Editor() {
   return (
     <div className="flex flex-col w-full h-full bg-neutral-950 overflow-hidden">
       <header className="flex items-center px-4 py-2 bg-neutral-900 border-b border-neutral-700 flex-none gap-3 select-none">
-        <span className="text-sm font-semibold text-violet-400 tracking-wide">PixelCraft</span>
+        <span className="text-sm font-semibold text-violet-400 tracking-wide">RasterScript</span>
         <span className="text-neutral-600 text-xs">Image Editor</span>
       </header>
 

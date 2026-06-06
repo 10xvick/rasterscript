@@ -2,7 +2,7 @@
 
 ## Overview
 
-PixelCraft is built on a **plugin-first architecture** where every feature is a self-contained module. The core engine is framework-agnostic and communicates with React via a thin Zustand bridge.
+RasterScript is built on a **plugin-first architecture** where every feature is a self-contained module. The core engine is framework-agnostic and communicates with React via a thin Zustand bridge.
 
 ---
 

@@ -9,7 +9,7 @@ export function StatusBar() {
       <span>{width} × {height} px</span>
       <span>Zoom: {Math.round(zoom * 100)}%</span>
       {plugin && <span>Tool: {plugin.name}</span>}
-      <span className="ml-auto">PixelCraft Editor · Ctrl+Scroll to zoom</span>
+      <span className="ml-auto">RasterScript Editor · Ctrl+Scroll to zoom</span>
     </footer>
   )
 }

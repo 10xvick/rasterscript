@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-const STORAGE_KEY = 'pixelcraft:settings'
+const STORAGE_KEY = 'rasterscript:settings'
 
 export type ExportFormat = 'png' | 'jpeg' | 'webp'
 

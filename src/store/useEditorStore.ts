@@ -41,7 +41,7 @@ interface EditorState {
   refreshPlugins: () => void
 }
 
-const SCRIPTS_KEY = 'pixelcraft:scripts'
+const SCRIPTS_KEY = 'rasterscript:scripts'
 
 function loadScripts(): UserScript[] {
   try {

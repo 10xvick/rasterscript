@@ -13,12 +13,12 @@ export const BUILTIN_SCRIPTS: BuiltinScript[] = [
     name: '📚 API Showcase (Start Here!)',
     description: 'Comprehensive example demonstrating all major ScriptAPI features.',
     code: `// ═══════════════════════════════════════════════════════════════════════════════
-// PixelCraft Script API Showcase
+// RasterScript Script API Showcase
 // ═══════════════════════════════════════════════════════════════════════════════
 // This script demonstrates all major features of the ScriptAPI.
 // Uncomment sections below to try different operations.
 
-api.log('=== PixelCraft Script API Showcase ===');
+api.log('=== RasterScript Script API Showcase ===');
 api.log(\`Canvas size: \${api.canvas.width}×\${api.canvas.height}\`);
 
 // ─────────────────────────────────────────────────────────────────────────────
