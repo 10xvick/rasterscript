@@ -2,6 +2,10 @@
 
 A **fully modular** React + TypeScript image editor built with a plugin architecture. Every feature is a self-contained plugin that can be added, removed, or extended without touching core code.
 
+🌐 **Live:** [https://10xvick.github.io/tools/image/rasterscript/](https://10xvick.github.io/tools/image/rasterscript/)
+
+---
+
 ## ✨ Features
 
 - **Modular Plugin System** — crop, resize, rotate, flip, draw, filters, and custom scripts
