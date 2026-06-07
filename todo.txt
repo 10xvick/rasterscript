@@ -1,0 +1,21 @@
+editor scripts like unity editor
+ai integration for code/image generation and chat agent
+extensions integration and marketplace
+blueprint system for creating custom tools
+blueprint-script sync
+automation tools
+other essential general tools
+  - text tool (font, size, color, alignment)
+  - shapes tool (rect, ellipse, line, polygon)
+  - fill / paint bucket
+  - eyedropper (pick color from canvas)
+  - gradient tool (linear, radial)
+  - blur / sharpen brush
+  - clone stamp tool
+  - magic wand / lasso selection
+  - color adjustments (brightness, contrast, hue, saturation, curves, levels)
+  - rulers and guides
+  - grid overlay
+  - layer blend modes and groups
+  - canvas info panel (dimensions, dpi, color mode)
+  - image histogram
