@@ -65,7 +65,7 @@ export function Toolbar() {
   return (
     <div className="flex flex-col w-full h-full bg-neutral-900 p-1.5 overflow-y-auto gap-0.5">
       {group('File')}
-      {btn('Import Image',  <FolderOpen size={15} />, () => setImportOpen(true), false, false, 'O')}
+      {btn('Open Image',  <FolderOpen size={15} />, () => setImportOpen(true), false, false, 'O')}
       {btn('New Canvas',  <FilePlus   size={15} />, newFile)}
       {btn('Export', <Download size={15} />, () => setExportOpen(true), false, false, 'E')}
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
