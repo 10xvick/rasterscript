@@ -3,38 +3,35 @@ import { useEditorStore } from '../../store/useEditorStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { EditorEngine } from '../../core/EditorEngine'
 import { registry } from '../../core/PluginRegistry'
+import { importFilesAsLayers, pasteFromClipboard, openBrowseForImport } from '../../utils/importImage'
+import { Clipboard, FolderOpen } from 'lucide-react'
 
-const CANVAS_PAD = 2000 // px of dead-space around canvas so there's always room to scroll/pan
+const CANVAS_PAD = 2000
 
 export function CanvasStage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  const { engine, zoom, setZoom, activePluginId, width, height, panMode } = useEditorStore()
+  const { engine, zoom, setZoom, activePluginId, width, height, panMode, hasImage } = useEditorStore()
   const checkerboard = useSettingsStore(s => s.checkerboard)
   const preventRecenter = useRef(false)
   const pendingScroll = useRef<{ left: number; top: number } | null>(null)
 
-  // Mount/remount: create engine on first mount, reattach on remount
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const store = useEditorStore.getState()
 
     if (store.engine) {
-      // Panel was closed and reopened — reattach engine to new canvas DOM node
       store.engine.reattach(canvas)
       store.syncFromEngine()
       return
     }
 
-    // First ever mount: create engine and wait for user to load an image
     const eng = new EditorEngine(canvas)
     store.setEngine(eng)
-    // hasImage stays false — DropZone will be shown until user loads an image
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
-  // Re-center scroll whenever zoom or canvas size changes (skipped when wheel zoom provides its own target)
   useLayoutEffect(() => {
     const el = stageRef.current
     if (!el || !width || !height) return
@@ -51,9 +48,6 @@ export function CanvasStage() {
     el.scrollTop  = (el.scrollHeight - el.clientHeight) / 2
   }, [zoom, width, height])
 
-  // Ctrl/Cmd+scroll = zoom (must be a native listener with passive:false to allow preventDefault)
-  // RAF-throttled: batches rapid wheel ticks into one React re-render per frame.
-  // Dynamic cap: keeps CSS dimensions ≤ 8192 px to avoid GPU compositing freezes.
   useEffect(() => {
     const el = stageRef.current
     if (!el) return
@@ -73,8 +67,6 @@ export function CanvasStage() {
 
       targetZoom = clamped
 
-      // Scroll target: keep the canvas pixel under the cursor stationary.
-      // Computed from *committed* scroll state → full ratio to target zoom.
       const rect = el.getBoundingClientRect()
       const cursorX = e.clientX - rect.left
       const cursorY = e.clientY - rect.top
@@ -84,7 +76,7 @@ export function CanvasStage() {
         top:  (el.scrollTop  + cursorY - CANVAS_PAD) * ratio + CANVAS_PAD - cursorY,
       }
 
-      if (rafId) return  // already scheduled for this frame
+      if (rafId) return
 
       rafId = requestAnimationFrame(() => {
         rafId = 0
@@ -102,7 +94,6 @@ export function CanvasStage() {
     }
   }, [setZoom])
 
-  // Drag-to-pan via native DOM events (React synthetic events + setPointerCapture is unreliable)
   useEffect(() => {
     const el = stageRef.current
     if (!el) return
@@ -131,25 +122,15 @@ export function CanvasStage() {
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointercancel', onUp)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
 
   const [dragOver, setDragOver] = useState(false)
 
-  const importFilesAsLayers = useCallback(async (files: FileList) => {
-    const eng = useEditorStore.getState().engine
-    const sync = useEditorStore.getState().syncFromEngine
-    if (!eng) return
-    const images = Array.from(files).filter(f => f.type.startsWith('image/'))
-    for (const file of images) {
-      const bmp = await createImageBitmap(file)
-      const tmp = document.createElement('canvas')
-      tmp.width = bmp.width; tmp.height = bmp.height
-      tmp.getContext('2d')!.drawImage(bmp, 0, 0)
-      const data = tmp.getContext('2d')!.getImageData(0, 0, bmp.width, bmp.height)
-      eng.importImageAsLayer(data, file.name.replace(/\.[^.]+$/, ''))
-      sync()
-    }
+  const dropAsLayers = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    importFilesAsLayers(e.dataTransfer.files)
   }, [])
 
   const activePlugin = activePluginId ? registry.get(activePluginId) : null
@@ -162,7 +143,7 @@ export function CanvasStage() {
       className={`relative flex-1 overflow-auto ${checkerboard ? 'checker-bg' : 'bg-neutral-950'} ${panMode ? 'cursor-grab active:cursor-grabbing select-none' : ''}`}
       onDragOver={e => { e.preventDefault(); if (!dragOver) setDragOver(true) }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false) }}
-      onDrop={e => { e.preventDefault(); setDragOver(false); importFilesAsLayers(e.dataTransfer.files) }}
+      onDrop={dropAsLayers}
     >
       <div className="flex items-center justify-center" style={{ padding: CANVAS_PAD }}>
         <div
@@ -184,11 +165,31 @@ export function CanvasStage() {
           )}
         </div>
       </div>
+
       {dragOver && (
         <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center bg-violet-950/40 ring-2 ring-violet-400 ring-inset">
           <div className="bg-neutral-900/90 border border-violet-500 rounded-xl px-6 py-3 text-sm text-violet-300 font-medium">
             Drop to add as layers
           </div>
+        </div>
+      )}
+
+      {hasImage && (
+        <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
+          <button
+            title="Browse files"
+            onClick={() => openBrowseForImport()}
+            className="p-2.5 rounded-lg bg-neutral-800/90 hover:bg-violet-600 text-neutral-400 hover:text-white border border-neutral-700 hover:border-violet-500 transition-all backdrop-blur-sm"
+          >
+            <FolderOpen size={18} />
+          </button>
+          <button
+            title="Paste image"
+            onClick={pasteFromClipboard}
+            className="p-2.5 rounded-lg bg-neutral-800/90 hover:bg-violet-600 text-neutral-400 hover:text-white border border-neutral-700 hover:border-violet-500 transition-all backdrop-blur-sm"
+          >
+            <Clipboard size={18} />
+          </button>
         </div>
       )}
     </div>
