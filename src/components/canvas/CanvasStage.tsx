@@ -3,8 +3,8 @@ import { useEditorStore } from '../../store/useEditorStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { EditorEngine } from '../../core/EditorEngine'
 import { registry } from '../../core/PluginRegistry'
-import { importFilesAsLayers } from '../../utils/importImage'
-
+import { importFilesAsLayers, pasteFromClipboard, openBrowseForImport } from '../../utils/importImage'
+import { Clipboard, FolderOpen } from 'lucide-react'
 
 const CANVAS_PAD = 2000
 
@@ -12,7 +12,7 @@ export function CanvasStage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  const { engine, zoom, setZoom, activePluginId, width, height, panMode } = useEditorStore()
+  const { engine, zoom, setZoom, activePluginId, width, height, panMode, hasImage } = useEditorStore()
   const checkerboard = useSettingsStore(s => s.checkerboard)
   const preventRecenter = useRef(false)
   const pendingScroll = useRef<{ left: number; top: number } | null>(null)
@@ -174,6 +174,24 @@ export function CanvasStage() {
         </div>
       )}
 
+      {hasImage && (
+        <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
+          <button
+            title="Browse files"
+            onClick={() => openBrowseForImport()}
+            className="p-2.5 rounded-lg bg-neutral-800/90 hover:bg-violet-600 text-neutral-400 hover:text-white border border-neutral-700 hover:border-violet-500 transition-all backdrop-blur-sm"
+          >
+            <FolderOpen size={18} />
+          </button>
+          <button
+            title="Paste image"
+            onClick={pasteFromClipboard}
+            className="p-2.5 rounded-lg bg-neutral-800/90 hover:bg-violet-600 text-neutral-400 hover:text-white border border-neutral-700 hover:border-violet-500 transition-all backdrop-blur-sm"
+          >
+            <Clipboard size={18} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
