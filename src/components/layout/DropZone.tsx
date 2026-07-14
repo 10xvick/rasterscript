@@ -70,10 +70,10 @@ export function DropZone({ open, onClose }: DropZoneProps) {
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
         onClick={e => { if (e.target === e.currentTarget) onClose?.() }}
       >
-        <div className="relative rounded-2xl overflow-hidden">
+        <div className="relative">
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 z-10 p-1 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors"
+            className="absolute -top-3 -right-3 z-10 p-1 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors"
           >
             <X size={18} />
           </button>
