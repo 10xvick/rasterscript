@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { ImagePlus, X } from 'lucide-react'
+import { ImagePlus, Clipboard, X } from 'lucide-react'
 import { useEditorStore } from '../../store/useEditorStore'
-import { importFilesAsDocument, importFilesAsLayers, openBrowseForImport } from '../../utils/importImage'
+import { importFilesAsDocument, importFilesAsLayers, pasteFromClipboard, openBrowseForImport } from '../../utils/importImage'
 
 interface DropZoneProps {
   open?: boolean
@@ -28,6 +28,11 @@ export function DropZone({ open, onClose }: DropZoneProps) {
     onClose?.()
   }
 
+  const handlePaste = async () => {
+    await pasteFromClipboard()
+    onClose?.()
+  }
+
   const content = (
     <div
       className={`flex flex-col items-center justify-center gap-4 transition-colors ${over ? 'bg-violet-950/80' : 'bg-neutral-950/80'}`}
@@ -46,6 +51,13 @@ export function DropZone({ open, onClose }: DropZoneProps) {
             onClick={handleBrowse}
           >
             Browse files
+          </button>
+          <button
+            className="px-5 py-2 rounded-lg border border-violet-600 text-violet-400 hover:bg-violet-950/50 text-sm font-medium transition-colors flex items-center gap-2"
+            onClick={handlePaste}
+          >
+            <Clipboard size={16} />
+            Paste image
           </button>
         </div>
       </div>
