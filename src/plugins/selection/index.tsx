@@ -268,12 +268,25 @@ function SelectionPanel({ context }: PluginPanelProps) {
 
   const applyInputRect = () => { if (localRect.w > 0 && localRect.h > 0) setRect(localRect) }
 
+  const copyToSystemClipboard = async (data: ImageData) => {
+    const tmp = document.createElement('canvas')
+    tmp.width = data.width; tmp.height = data.height
+    tmp.getContext('2d')!.putImageData(data, 0, 0)
+    tmp.toBlob(async (blob) => {
+      if (!blob) return
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      } catch { }
+    })
+  }
+
   const doCopy = useCallback(() => {
     if (!_rect || _rect.w < 1 || _rect.h < 1) return
     const data = context.canvas.getContext('2d', { willReadFrequently: true })!.getImageData(
       Math.round(_rect.x), Math.round(_rect.y), Math.round(_rect.w), Math.round(_rect.h)
     )
     _clipboard = { data, x: Math.round(_rect.x), y: Math.round(_rect.y), w: Math.round(_rect.w), h: Math.round(_rect.h) }
+    copyToSystemClipboard(data)
   }, [context])
 
   const doCut = useCallback(() => {
@@ -282,9 +295,11 @@ function SelectionPanel({ context }: PluginPanelProps) {
     if (!lc) return
     const { x, y, w, h } = _rect
     const ix = Math.round(x), iy = Math.round(y), iw = Math.round(w), ih = Math.round(h)
-    _clipboard = { data: lc.getImageData(ix, iy, iw, ih), x: ix, y: iy, w: iw, h: ih }
+    const data = lc.getImageData(ix, iy, iw, ih)
+    _clipboard = { data, x: ix, y: iy, w: iw, h: ih }
     lc.clearRect(ix, iy, iw, ih)
     context.compositeToCanvas(); context.pushHistory('Cut')
+    copyToSystemClipboard(data)
   }, [context])
 
   const doPaste = useCallback(() => {

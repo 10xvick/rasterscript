@@ -1,11 +1,7 @@
 import { useState } from 'react'
-import { ImagePlus } from 'lucide-react'
+import { ImagePlus, Clipboard } from 'lucide-react'
 import { useEditorStore } from '../../store/useEditorStore'
 
-/**
- * Full-canvas drop zone that appears when no image is loaded.
- * Supports dropping multiple images — first becomes the background, rest become layers.
- */
 export function DropZone() {
   const { engine, hasImage, setHasImage, syncFromEngine } = useEditorStore()
   const [over, setOver] = useState(false)
@@ -34,6 +30,29 @@ export function DropZone() {
     for (const file of images.slice(1)) await importAsLayer(file)
   }
 
+  const loadImageFromBlob = async (blob: Blob) => {
+    if (!engine) return
+    const bmp = await createImageBitmap(blob)
+    engine.loadImage(bmp)
+    setHasImage(true)
+    syncFromEngine()
+  }
+
+  const pasteFromClipboard = async () => {
+    try {
+      const items = await navigator.clipboard.read()
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type)
+            await loadImageFromBlob(blob)
+            return
+          }
+        }
+      }
+    } catch { }
+  }
+
   return (
     <div
       className={`absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 transition-colors ${over ? 'bg-violet-950/80' : 'bg-neutral-950/80'}`}
@@ -46,17 +65,26 @@ export function DropZone() {
         <p className="text-neutral-300 text-lg font-medium">Drop images to start</p>
         <p className="text-neutral-500 text-sm mt-1">Multiple files — each becomes a layer</p>
         <p className="text-neutral-500 text-sm mt-1">or</p>
-        <button
-          className="mt-3 px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-colors"
-          onClick={() => {
-            const input = document.createElement('input')
-            input.type = 'file'; input.accept = 'image/*'; input.multiple = true
-            input.onchange = () => { if (input.files?.length) loadFiles(input.files) }
-            input.click()
-          }}
-        >
-          Browse files
-        </button>
+        <div className="flex items-center justify-center gap-3 mt-3">
+          <button
+            className="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-colors"
+            onClick={() => {
+              const input = document.createElement('input')
+              input.type = 'file'; input.accept = 'image/*'; input.multiple = true
+              input.onchange = () => { if (input.files?.length) loadFiles(input.files) }
+              input.click()
+            }}
+          >
+            Browse files
+          </button>
+          <button
+            className="px-5 py-2 rounded-lg border border-violet-600 text-violet-400 hover:bg-violet-950/50 text-sm font-medium transition-colors flex items-center gap-2"
+            onClick={pasteFromClipboard}
+          >
+            <Clipboard size={16} />
+            Paste image
+          </button>
+        </div>
       </div>
     </div>
   )
