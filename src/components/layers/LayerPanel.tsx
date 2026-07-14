@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Plus, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Upload, Layers, ChevronsDown } from 'lucide-react'
 import { useEditorStore } from '../../store/useEditorStore'
+import { DropZone } from '../layout/DropZone'
 import type { LayerInfo } from '../../core/types'
 
 const BLEND_MODES: GlobalCompositeOperation[] = [
@@ -11,9 +12,9 @@ const BLEND_MODES: GlobalCompositeOperation[] = [
 
 export function LayerPanel() {
   const { engine, layerInfos, activeLayerId, syncFromEngine } = useEditorStore()
-  const fileRef = useRef<HTMLInputElement>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameVal, setRenameVal]   = useState('')
+  const [importOpen, setImportOpen] = useState(false)
 
   if (!engine || !layerInfos.length) {
     return (
@@ -27,22 +28,6 @@ export function LayerPanel() {
   const sync = syncFromEngine
 
   const activeLayer = layerInfos.find((l: LayerInfo) => l.id === activeLayerId)
-
-  const importFile = (file: File) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      const tmp = document.createElement('canvas')
-      tmp.width  = img.naturalWidth
-      tmp.height = img.naturalHeight
-      tmp.getContext('2d')!.drawImage(img, 0, 0)
-      const data = tmp.getContext('2d')!.getImageData(0, 0, tmp.width, tmp.height)
-      e.importImageAsLayer(data, file.name.replace(/\.[^.]+$/, ''))
-      URL.revokeObjectURL(url)
-      sync()
-    }
-    img.src = url
-  }
 
   const startRename = (layer: LayerInfo) => {
     setRenamingId(layer.id)
@@ -65,7 +50,7 @@ export function LayerPanel() {
           className="flex items-center gap-1 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300">
           <Plus size={10} /> Add
         </button>
-        <button onClick={() => fileRef.current?.click()} title="Import image as new layer"
+        <button onClick={() => setImportOpen(true)} title="Import image as new layer"
           className="flex items-center gap-1 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300">
           <Upload size={10} /> Import
         </button>
@@ -81,9 +66,6 @@ export function LayerPanel() {
           className="flex items-center gap-1 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300">
           <Layers size={10} /> Flatten
         </button>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden"
-          onChange={ev => { const f = ev.target.files?.[0]; if (f) importFile(f); ev.target.value = '' }}
-        />
       </div>
 
       {/* ── Layer list (top = visually top) ── */}
@@ -163,6 +145,8 @@ export function LayerPanel() {
           </div>
         </div>
       )}
+
+      <DropZone open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   )
 }

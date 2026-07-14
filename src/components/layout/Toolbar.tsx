@@ -3,6 +3,7 @@ import { Undo2, Redo2, ZoomIn, ZoomOut, Download, FolderOpen, FilePlus, Settings
 import { useEditorStore } from '../../store/useEditorStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { ExportDialog } from './ExportDialog'
+import { DropZone } from './DropZone'
 import type { EditorPlugin } from '../../core/types'
 
 const CATEGORY_ORDER: EditorPlugin['category'][] = ['transform', 'draw', 'filter', 'cutout', 'script', 'export', 'experimental']
@@ -14,24 +15,10 @@ export function Toolbar() {
   } = useEditorStore()
   const { openSettings, isPluginVisible, defaultWidth, defaultHeight, defaultFill, showShortcuts, compactMode } = useSettingsStore()
   const [exportOpen, setExportOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const undo = () => { engine?.undo(); syncFromEngine() }
   const redo = () => { engine?.redo(); syncFromEngine() }
-
-  const openFile = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    input.onchange = async () => {
-      const file = input.files?.[0]
-      if (!file || !engine) return
-      const bmp = await createImageBitmap(file)
-      engine.loadImage(bmp)
-      setHasImage(true)
-      syncFromEngine()
-    }
-    input.click()
-  }
 
   const newFile = () => {
     if (!engine) return
@@ -78,7 +65,7 @@ export function Toolbar() {
   return (
     <div className="flex flex-col w-full h-full bg-neutral-900 p-1.5 overflow-y-auto gap-0.5">
       {group('File')}
-      {btn('Open Image',  <FolderOpen size={15} />, openFile,  false, false, 'O')}
+      {btn('Open Image',  <FolderOpen size={15} />, () => setImportOpen(true), false, false, 'O')}
       {btn('New Canvas',  <FilePlus   size={15} />, newFile)}
       {btn('Export', <Download size={15} />, () => setExportOpen(true), false, false, 'E')}
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
@@ -120,6 +107,8 @@ export function Toolbar() {
         <span className="flex-1 text-center text-xs text-neutral-400 tabular-nums">{Math.round(zoom * 100)}%</span>
         {btn('', <ZoomIn  size={15} />, () => setZoom(zoom * 1.25))}
       </div>
+
+      <DropZone open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   )
 }
