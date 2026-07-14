@@ -1,7 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { Crop } from 'lucide-react'
 import type { EditorPlugin, PluginOverlayProps, PluginPanelProps } from '../../core/types'
-import { useEditorStore } from '../../store/useEditorStore'
 
 interface Rect { x: number; y: number; w: number; h: number }
 
@@ -11,20 +10,32 @@ interface CropOverlayProps extends PluginOverlayProps {
   onRectChange?: (rect: Rect | null) => void
 }
 
-function CropOverlay({ context, onRectChange }: CropOverlayProps) {
-  const zoom = useEditorStore(s => s.zoom)
+function CropOverlay({ context, containerRef, onRectChange }: CropOverlayProps) {
   const divRef = useRef<HTMLDivElement>(null)
   const [rect, setRect] = useState<Rect | null>(null)
   const [dragging, setDragging] = useState(false)
   const start = useRef({ x: 0, y: 0 })
 
   const getCanvasPoint = useCallback((e: React.PointerEvent) => {
-    const r = divRef.current!.getBoundingClientRect()
+    const div = divRef.current!
+    const r = div.getBoundingClientRect()
+    const container = containerRef.current!
+    const cr = container.getBoundingClientRect()
+    
+    // Screen coordinates relative to div
+    const screenX = e.clientX - r.left
+    const screenY = e.clientY - r.top
+    
+    // Scale factor from screen to canvas
+    const scaleX = context.getWidth() / cr.width
+    const scaleY = context.getHeight() / cr.height
+    
+    // Canvas coordinates
     return {
-      x: (e.clientX - r.left) * context.getWidth()  / r.width,
-      y: (e.clientY - r.top)  * context.getHeight() / r.height,
+      x: screenX * scaleX,
+      y: screenY * scaleY,
     }
-  }, [context])
+  }, [context, containerRef])
 
   const onPointerDown = (e: React.PointerEvent) => {
     const p = getCanvasPoint(e)
@@ -53,11 +64,19 @@ function CropOverlay({ context, onRectChange }: CropOverlayProps) {
     onRectChange?.(rect)
   }
 
-  const screenRect = rect && rect.w > 2 && rect.h > 2 ? {
-    x: rect.x * zoom,
-    y: rect.y * zoom,
-    w: rect.w * zoom,
-    h: rect.h * zoom,
+  if (!containerRef.current) return null
+  const container = containerRef.current
+  const cw = container.clientWidth
+  const ch = container.clientHeight
+  const scaleX = context.getWidth() / cw
+  const scaleY = context.getHeight() / ch
+
+  // Convert canvas coordinates back to screen for rendering
+  const screenRect = rect ? {
+    x: rect.x / scaleX,
+    y: rect.y / scaleY,
+    w: rect.w / scaleX,
+    h: rect.h / scaleY,
   } : null
 
   return (
@@ -69,7 +88,7 @@ function CropOverlay({ context, onRectChange }: CropOverlayProps) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      {screenRect && (
+      {screenRect && screenRect.w > 2 && screenRect.h > 2 && (
         <>
           <div
             className="absolute"
