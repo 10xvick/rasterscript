@@ -1,9 +1,8 @@
 import { Fragment, useState } from 'react'
-import { Undo2, Redo2, ZoomIn, ZoomOut, Download, FolderOpen, FilePlus, Settings, Clipboard, ImageUp } from 'lucide-react'
+import { Undo2, Redo2, ZoomIn, ZoomOut, Download, FolderOpen, FilePlus, Settings } from 'lucide-react'
 import { useEditorStore } from '../../store/useEditorStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { ExportDialog } from './ExportDialog'
-import { pasteFromClipboard, openBrowseForImport } from '../../utils/importImage'
 import type { EditorPlugin } from '../../core/types'
 
 const CATEGORY_ORDER: EditorPlugin['category'][] = ['transform', 'draw', 'filter', 'cutout', 'script', 'export', 'experimental']
@@ -80,8 +79,6 @@ export function Toolbar() {
     <div className="flex flex-col w-full h-full bg-neutral-900 p-1.5 overflow-y-auto gap-0.5">
       {group('File')}
       {btn('Open Image',  <FolderOpen size={15} />, openFile,  false, false, 'O')}
-      {btn('Import',  <ImageUp size={15} />, () => openBrowseForImport(), false, false, 'I')}
-      {btn('Paste', <Clipboard size={15} />, pasteFromClipboard, false, false, 'V')}
       {btn('New Canvas',  <FilePlus   size={15} />, newFile)}
       {btn('Export', <Download size={15} />, () => setExportOpen(true), false, false, 'E')}
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />

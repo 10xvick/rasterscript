@@ -5,7 +5,6 @@ import { SettingsPanel } from './SettingsPanel'
 import { useEditorStore } from '../../store/useEditorStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { registry } from '../../core/PluginRegistry'
-import { handlePasteEvent } from '../../utils/importImage'
 
 // ─── Plugin imports ───────────────────────────────────────────────────────────
 import { cropPlugin } from '../../plugins/crop'
@@ -61,12 +60,6 @@ export function Editor() {
     })
     refreshPlugins()
   }, [refreshPlugins])
-
-  // Global paste handler (import images from clipboard)
-  useEffect(() => {
-    document.addEventListener('paste', handlePasteEvent)
-    return () => document.removeEventListener('paste', handlePasteEvent)
-  }, [])
 
   // Keyboard shortcuts (modifier-key only — no bare single-key shortcuts)
   useEffect(() => {
