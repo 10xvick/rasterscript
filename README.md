@@ -199,6 +199,34 @@ npm run lint     # Run ESLint
 
 ---
 
+## 🗺️ Roadmap
+
+- ⌨️ Keyboard shortcut editor
+- 🎨 Brush engine
+- 🔤 Text tool
+- 🔄 Non-destructive filters
+- 📦 Plugin marketplace
+- 🎞️ Animation timeline
+- 🌐 WebGPU acceleration
+- 📄 PSD import/export
+
+---
+
+## 📋 Changelog
+
+- `140691e` — Replace toolbar Open Image with DropZone modal, remove duplicate layer import logic
+- `ffa2564` — Add paste button to DropZone, copy selection to system clipboard, fix crop overlay zoom
+- `c79e776` — Fix crop overlay zoom: subscribe to zoom, use divRef for coordinate conversion
+- `7c5fb34` — Add color swatches & hardness slider to doodle brush
+- `5d70ee8` — Fix crop overlay zoom: subscribe to zoom, use divRef for coordinate conversion
+- `71b87b1` — Add paste image option to DropZone and system clipboard copy for selection
+- `815efab` — Fix DropZone modal border rounding, replace LayerPanel import with shared utility
+- `d61f368` — Replace toolbar import buttons with DropZone modal, remove floating canvas import buttons
+- `61c2ac2` — Rename Open Image to Import Image, remove redundant Import/Paste toolbar buttons
+- `2fd48e9` — Add version and copyright to status bar
+
+---
+
 ## 📄 License
 
 MIT

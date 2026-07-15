@@ -3,7 +3,6 @@ import { Columns, Rows, X, LayoutDashboard, ImageIcon, Wrench, SlidersHorizontal
 import { CanvasStage } from '../canvas/CanvasStage'
 import { Toolbar } from './Toolbar'
 import { PanelSidebar } from './PanelSidebar'
-import { DropZone } from './DropZone'
 import { LayerPanel } from '../layers/LayerPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -33,10 +32,9 @@ const WIDGETS: Record<string, { name: string; icon: React.ElementType; Component
   canvas: {
     name: 'Canvas',
     icon: ImageIcon,
-    Component: () => (
+      Component: () => (
       <div className="h-full flex flex-col relative">
         <CanvasStage />
-        <DropZone />
       </div>
     ),
   },

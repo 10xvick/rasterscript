@@ -1,8 +1,9 @@
 import { Fragment, useState } from 'react'
-import { Undo2, Redo2, ZoomIn, ZoomOut, Download, FolderOpen, FilePlus, Settings } from 'lucide-react'
+import { Undo2, Redo2, ZoomIn, ZoomOut, Download, FolderOpen, FilePlus, Settings, Info } from 'lucide-react'
 import { useEditorStore } from '../../store/useEditorStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { ExportDialog } from './ExportDialog'
+import { AboutDialog } from './AboutDialog'
 import { DropZone } from './DropZone'
 import type { EditorPlugin } from '../../core/types'
 
@@ -15,7 +16,8 @@ export function Toolbar() {
   } = useEditorStore()
   const { openSettings, isPluginVisible, defaultWidth, defaultHeight, defaultFill, showShortcuts, compactMode } = useSettingsStore()
   const [exportOpen, setExportOpen] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(true)
 
   const undo = () => { engine?.undo(); syncFromEngine() }
   const redo = () => { engine?.redo(); syncFromEngine() }
@@ -99,6 +101,8 @@ export function Toolbar() {
 
       {divider()}
       {btn('Settings', <Settings size={15} />, openSettings)}
+      {btn('About',    <Info     size={15} />, () => setAboutOpen(true))}
+      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       {divider()}
       {group('Zoom')}

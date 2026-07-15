@@ -11,7 +11,7 @@ export function DropZone({ open, onClose }: DropZoneProps) {
   const { engine, hasImage, setHasImage, syncFromEngine } = useEditorStore()
   const [over, setOver] = useState(false)
 
-  if (hasImage && !open) return null
+  if (!open) return null
 
   const isModal = !!(open && onClose)
 
@@ -100,6 +100,7 @@ export function DropZone({ open, onClose }: DropZoneProps) {
         <ImagePlus size={48} className="mx-auto mb-4 text-neutral-500" />
         <p className="text-neutral-300 text-lg font-medium">Drop images to start</p>
         <p className="text-neutral-500 text-sm mt-1">Multiple files — each becomes a layer</p>
+
         <p className="text-neutral-500 text-sm mt-1">or</p>
         <div className="flex items-center justify-center gap-3 mt-3">
           <button
@@ -140,7 +141,7 @@ export function DropZone({ open, onClose }: DropZoneProps) {
   }
 
   return (
-    <div className="absolute inset-0 z-20">
+    <div className="absolute inset-0 z-20 flex items-center justify-center">
       {content}
     </div>
   )
