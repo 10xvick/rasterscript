@@ -29,6 +29,22 @@ export interface SpritesheetState {
   currentFrame: number
 }
 
+export interface PixelationState {
+  blockSize: number
+  paletteStyle: 'true-color' | 'monochrome' | 'pico-8' | 'gameboy' | 'cga' | 'posterized'
+  posterizeLevels: number
+  ditherStrength: number
+  previewTarget: 'active' | 'composite'
+}
+
+const INITIAL_PIXELATION_STATE: PixelationState = {
+  blockSize: 8,
+  paletteStyle: 'true-color',
+  posterizeLevels: 4,
+  ditherStrength: 50,
+  previewTarget: 'composite',
+}
+
 const INITIAL_SPRITESHEET_STATE: SpritesheetState = {
   file: null,
   loadingFile: false,
@@ -96,6 +112,15 @@ interface EditorState {
   spritesheet: SpritesheetState
   setSpritesheet: (update: Partial<SpritesheetState> | ((prev: SpritesheetState) => Partial<SpritesheetState>)) => void
   resetSpritesheet: () => void
+
+  // Crop synchronization
+  cropRect: { x: number; y: number; w: number; h: number } | null
+  setCropRect: (r: { x: number; y: number; w: number; h: number } | null) => void
+
+  // Pixelation State
+  pixelation: PixelationState
+  setPixelation: (update: Partial<PixelationState> | ((prev: PixelationState) => Partial<PixelationState>)) => void
+  resetPixelation: () => void
 }
 
 const SCRIPTS_KEY = 'rasterscript:scripts'
@@ -176,4 +201,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
   })),
   resetSpritesheet: () => set({ spritesheet: INITIAL_SPRITESHEET_STATE }),
+  cropRect: null,
+  setCropRect: (cropRect) => set({ cropRect }),
+
+  pixelation: INITIAL_PIXELATION_STATE,
+  setPixelation: (update) => set((state) => ({
+    pixelation: {
+      ...state.pixelation,
+      ...(typeof update === 'function' ? update(state.pixelation) : update)
+    }
+  })),
+  resetPixelation: () => set({ pixelation: INITIAL_PIXELATION_STATE }),
 }))

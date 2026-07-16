@@ -172,11 +172,14 @@ export function CanvasStage() {
         >
           <canvas
             ref={canvasRef}
+            width={width}
+            height={height}
             style={{
               width: width * zoom,
               height: height * zoom,
               display: 'block',
               imageRendering: zoom >= 4 ? 'pixelated' : 'auto',
+              opacity: activePluginId === 'pixelation' ? 0 : 1,
             }}
           />
           {Overlay && ctx && !panMode && (
