@@ -152,6 +152,8 @@ export class EditorEngine {
 
   pasteAsLayer(data: ImageData, x: number, y: number, name = 'Pasted') {
     this._layers.addLayerAt(data, x, y, name)
+    this._canvas.width  = this._layers.width
+    this._canvas.height = this._layers.height
     this._layers.composite(this._canvas)
     this.history.push(this._snapshot('Paste'))
     this.emit()

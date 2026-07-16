@@ -1,18 +1,20 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useState, useEffect, useReducer, createContext, useContext, useRef } from 'react'
 import { Columns, Rows, X, LayoutDashboard, ImageIcon, Wrench, SlidersHorizontal, Layers, ChevronsUpDown } from 'lucide-react'
 import { CanvasStage } from '../canvas/CanvasStage'
 import { Toolbar } from './Toolbar'
 import { PanelSidebar } from './PanelSidebar'
 import { LayerPanel } from '../layers/LayerPanel'
+import { SpritesheetPreviewWidget } from '../../plugins/spritesheet'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Tab { id: string; title: string; widgetId: string }
-interface AreaNode { id: string; type: 'area'; tabs: Tab[]; activeTab: number }
-interface SplitNode { id: string; type: 'split'; dir: 'row' | 'col'; ratio: number; a: LayoutNode; b: LayoutNode }
-type LayoutNode = AreaNode | SplitNode
+export interface Tab { id: string; title: string; widgetId: string }
+export interface AreaNode { id: string; type: 'area'; tabs: Tab[]; activeTab: number }
+export interface SplitNode { id: string; type: 'split'; dir: 'row' | 'col'; ratio: number; a: LayoutNode; b: LayoutNode }
+export type LayoutNode = AreaNode | SplitNode
 
-type LayoutAction =
+export type LayoutAction =
   | { type: 'SPLIT_AREA'; areaId: string; dir: 'row' | 'col' }
   | { type: 'CLOSE_AREA'; areaId: string }
   | { type: 'UPDATE_RATIO'; id: string; ratio: number }
@@ -32,7 +34,7 @@ const WIDGETS: Record<string, { name: string; icon: React.ElementType; Component
   canvas: {
     name: 'Canvas',
     icon: ImageIcon,
-      Component: () => (
+    Component: () => (
       <div className="h-full flex flex-col relative">
         <CanvasStage />
       </div>
@@ -60,6 +62,11 @@ const WIDGETS: Record<string, { name: string; icon: React.ElementType; Component
         <LayerPanel />
       </div>
     ),
+  },
+  spritesheet_preview: {
+    name: 'Sprite Preview',
+    icon: LayoutDashboard,
+    Component: () => <SpritesheetPreviewWidget />,
   },
 }
 
@@ -98,9 +105,18 @@ const mutateArea = (tree: LayoutNode, targetId: string, fn: (a: AreaNode) => Are
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
-interface LayoutContextValue { layout: LayoutNode; dispatch: React.Dispatch<LayoutAction> }
-const LayoutContext = createContext<LayoutContextValue | null>(null)
-const useLayout = () => useContext(LayoutContext)!
+export interface LayoutContextValue { layout: LayoutNode; dispatch: React.Dispatch<LayoutAction> }
+export const LayoutContext = createContext<LayoutContextValue | null>(null)
+export const useLayout = () => useContext(LayoutContext)!
+
+export function findWidgetTab(tree: LayoutNode, widgetId: string): { areaId: string; tabIndex: number } | null {
+  if (tree.type === 'area') {
+    const idx = tree.tabs.findIndex(t => t.widgetId === widgetId)
+    if (idx >= 0) return { areaId: tree.id, tabIndex: idx }
+    return null
+  }
+  return findWidgetTab(tree.a, widgetId) || findWidgetTab(tree.b, widgetId)
+}
 
 // ─── Resizer ──────────────────────────────────────────────────────────────────
 
@@ -232,7 +248,9 @@ function TabBar({ area }: { area: AreaNode }) {
       const d = JSON.parse(e.dataTransfer.getData('application/json'))
       if (d.sourceAreaId !== area.id)
         dispatch({ type: 'MOVE_TAB', sourceAreaId: d.sourceAreaId, targetAreaId: area.id, tabId: d.tabId })
-    } catch { }
+    } catch (err) {
+      console.debug('TabBar drop failed', err)
+    }
   }
 
   return (
@@ -267,9 +285,6 @@ function TabBar({ area }: { area: AreaNode }) {
         </button>
         <button onClick={() => dispatch({ type: 'SPLIT_AREA', areaId: area.id, dir: 'col' })} className="p-1 hover:bg-neutral-700 rounded text-neutral-500 hover:text-white transition-colors" title="Split Down">
           <Rows size={12} />
-        </button>
-        <button onClick={() => dispatch({ type: 'CLOSE_AREA', areaId: area.id })} className="p-1 hover:bg-red-500/20 hover:text-red-400 rounded text-neutral-500 transition-colors" title="Close Panel">
-          <X size={12} />
         </button>
       </div>
     </div>
@@ -309,15 +324,13 @@ function EmptyAreaState({ areaId }: { areaId: string }) {
 
 function AreaContainer({ node }: { node: AreaNode }) {
   const activeTab = node.tabs[node.activeTab]
-  const Content = activeTab && WIDGETS[activeTab.widgetId]
-    ? WIDGETS[activeTab.widgetId].Component
-    : () => <EmptyAreaState areaId={node.id} />
+  const widget = activeTab && WIDGETS[activeTab.widgetId]
 
   return (
     <div className="flex flex-col h-full w-full bg-neutral-950 overflow-hidden">
       <TabBar area={node} />
       <div className="flex-1 overflow-hidden relative min-h-0">
-        <Content />
+        {widget ? <widget.Component /> : <EmptyAreaState areaId={node.id} />}
       </div>
     </div>
   )

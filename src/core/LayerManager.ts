@@ -134,13 +134,17 @@ export class LayerManager {
 
   /** Add a new layer with image data placed at exact pixel position (no scaling/centering) */
   addLayerAt(data: ImageData, x: number, y: number, name?: string): LayerInfo {
+    if (this._width === 0 || this._height === 0) {
+      this._width  = data.width
+      this._height = data.height
+    }
     const layer = this._make(name ?? `Layer ${this._layers.length + 1}`, this._width, this._height)
     const tmp = mkCanvas(data.width, data.height)
     tmp.getContext('2d', { willReadFrequently: true })!.putImageData(data, 0, 0)
     layer.canvas.getContext('2d', { willReadFrequently: true })!.drawImage(tmp, x, y)
     this._layers.push(layer)
     this._activeId = layer.id
-    return layer
+    return { id: layer.id, name: layer.name, visible: layer.visible, opacity: layer.opacity, blendMode: layer.blendMode }
   }
 
   /** Crop every layer to the given rect without flattening */

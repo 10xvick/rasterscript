@@ -16,8 +16,10 @@ import { filtersPlugin } from '../../plugins/filters'
 import { scriptPlugin } from '../../plugins/script'
 import { selectionPlugin } from '../../plugins/selection'
 import { removeBgPlugin } from '../../plugins/removebg'
+import { blurPlugin } from '../../plugins/blur'
+import { spritesheetPlugin } from '../../plugins/spritesheet'
 
-const PLUGINS = [selectionPlugin, cropPlugin, resizePlugin, doodlePlugin, rotatePlugin, flipPlugin, filtersPlugin, removeBgPlugin, scriptPlugin]
+const PLUGINS = [selectionPlugin, cropPlugin, resizePlugin, doodlePlugin, blurPlugin, spritesheetPlugin, rotatePlugin, flipPlugin, filtersPlugin, removeBgPlugin, scriptPlugin]
 
 function accentCSS(hue: number) {
   const shades: [number, number, number][] = [
