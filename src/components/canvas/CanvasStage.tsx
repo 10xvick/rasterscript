@@ -10,7 +10,7 @@ export function CanvasStage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  const { engine, zoom, setZoom, activePluginId, width, height, panMode, layerInfos, activeLayerId } = useEditorStore()
+  const { engine, zoom, setZoom, activePluginId, width, height, panMode } = useEditorStore()
   const checkerboard = useSettingsStore(s => s.checkerboard)
   const preventRecenter = useRef(false)
   const pendingScroll = useRef<{ left: number; top: number } | null>(null)
@@ -157,7 +157,7 @@ export function CanvasStage() {
     if (engine) {
       engine.composite()
     }
-  }, [engine, width, height, layerInfos, activeLayerId])
+  }, [engine, width, height])
 
   const activePlugin = activePluginId ? registry.get(activePluginId) : null
   const Overlay = activePlugin?.CanvasOverlay
