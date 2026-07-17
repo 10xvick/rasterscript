@@ -65,8 +65,6 @@ function SpritesheetPanel({ context }: PluginPanelProps) {
     removeBg, bgKeyColor, bgThreshold, compiledCanvas, numCompiledFrames, previewing
   } = spritesheet
 
-  // Setter mapping
-  const setFile = (val: File | null) => setSpritesheet({ file: val })
   const setLoadingFile = (val: boolean) => setSpritesheet({ loadingFile: val })
   const setProcessing = (val: boolean) => setProcessingInternal(val)
   const setStatusText = (val: string) => setSpritesheet({ statusText: val })
@@ -108,12 +106,15 @@ function SpritesheetPanel({ context }: PluginPanelProps) {
   const isStaticImage = file && !file.type.startsWith('video/') && file.type !== 'image/gif' && !file.name.endsWith('.gif')
 
   // Track file metadata on load
-  const loadFile = (selected: File) => {
-    setFile(selected)
-    setLoadingFile(true)
-    setCompiledCanvas(null)
-    setNumCompiledFrames(0)
-    setStartTime(0)
+  const loadFile = (selected: File, isFromActive = false) => {
+    setSpritesheet({
+      file: selected,
+      isFromActiveLayer: isFromActive,
+      loadingFile: true,
+      compiledCanvas: null,
+      numCompiledFrames: 0,
+      startTime: 0,
+    })
 
     const url = URL.createObjectURL(selected)
     if (selected.type.startsWith('video/')) {
@@ -219,7 +220,7 @@ function SpritesheetPanel({ context }: PluginPanelProps) {
       const layer = layerInfos.find(l => l.id === activeLayerId)
       const name = layer ? layer.name : 'workspace_layer'
       const loadedFile = new File([blob], `${name}.png`, { type: 'image/png' })
-      loadFile(loadedFile)
+      loadFile(loadedFile, true)
     }, 'image/png')
   }
 

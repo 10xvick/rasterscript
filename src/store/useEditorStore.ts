@@ -27,6 +27,7 @@ export interface SpritesheetState {
   numCompiledFrames: number
   previewing: boolean
   currentFrame: number
+  isFromActiveLayer: boolean
 }
 
 export interface PixelationState {
@@ -69,6 +70,7 @@ const INITIAL_SPRITESHEET_STATE: SpritesheetState = {
   numCompiledFrames: 0,
   previewing: true,
   currentFrame: 0,
+  isFromActiveLayer: false,
 }
 
 interface EditorState {
@@ -133,6 +135,17 @@ function loadScripts(): UserScript[] {
   }
 }
 
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return {
+    r: isNaN(r) ? 0 : r,
+    g: isNaN(g) ? 0 : g,
+    b: isNaN(b) ? 0 : b,
+  }
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   engine: null,
   setEngine: (engine) => {
@@ -168,6 +181,51 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       layerInfos: e.layerInfos,
       activeLayerId: e.activeLayerId,
     })
+
+    const spritesheet = get().spritesheet
+    if (spritesheet.isFromActiveLayer && spritesheet.file) {
+      const actCtx = e.getContext().getActiveLayerCtx()
+      if (actCtx && actCtx.canvas.width > 0 && actCtx.canvas.height > 0) {
+        const layerCanvas = actCtx.canvas
+        const copyCanvas = document.createElement('canvas')
+        copyCanvas.width = layerCanvas.width
+        copyCanvas.height = layerCanvas.height
+        const copyCtx = copyCanvas.getContext('2d')!
+        copyCtx.drawImage(layerCanvas, 0, 0)
+
+        if (spritesheet.removeBg) {
+          const rgbKey = hexToRgb(spritesheet.bgKeyColor)
+          const imgData = copyCtx.getImageData(0, 0, copyCanvas.width, copyCanvas.height)
+          const dataArr = imgData.data
+          for (let i = 0; i < dataArr.length; i += 4) {
+            const r = dataArr[i]
+            const g = dataArr[i + 1]
+            const b = dataArr[i + 2]
+            const diff = Math.sqrt(
+              Math.pow(r - rgbKey.r, 2) +
+              Math.pow(g - rgbKey.g, 2) +
+              Math.pow(b - rgbKey.b, 2)
+            )
+            if (diff < spritesheet.bgThreshold) {
+              dataArr[i + 3] = 0
+            }
+          }
+          copyCtx.putImageData(imgData, 0, 0)
+        }
+
+        const cols = Math.floor((layerCanvas.width + spritesheet.padding) / (spritesheet.frameWidth + spritesheet.padding))
+        const rows = Math.floor((layerCanvas.height + spritesheet.padding) / (spritesheet.frameHeight + spritesheet.padding))
+        const totalFrames = Math.max(1, Math.min(spritesheet.maxFrames, cols * rows))
+
+        set((state) => ({
+          spritesheet: {
+            ...state.spritesheet,
+            compiledCanvas: copyCanvas,
+            numCompiledFrames: totalFrames
+          }
+        }))
+      }
+    }
   },
 
   hasImage: false,

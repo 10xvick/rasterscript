@@ -10,7 +10,7 @@ export function CanvasStage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  const { engine, zoom, setZoom, activePluginId, width, height, panMode } = useEditorStore()
+  const { engine, zoom, setZoom, activePluginId, width, height, panMode, layerInfos, activeLayerId } = useEditorStore()
   const checkerboard = useSettingsStore(s => s.checkerboard)
   const preventRecenter = useRef(false)
   const pendingScroll = useRef<{ left: number; top: number } | null>(null)
@@ -32,7 +32,7 @@ export function CanvasStage() {
     const eng = new EditorEngine(canvas)
     store.setEngine(eng)
     // hasImage stays false — DropZone will be shown until user loads an image
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Re-center scroll whenever zoom or canvas size changes (skipped when wheel zoom provides its own target)
   useLayoutEffect(() => {
@@ -131,7 +131,7 @@ export function CanvasStage() {
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointercancel', onUp)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
 
   const [dragOver, setDragOver] = useState(false)
@@ -151,6 +151,13 @@ export function CanvasStage() {
       sync()
     }
   }, [])
+
+  // Repaint composition whenever engine or canvas size/layers change (e.g. initial load, undo/redo, crop)
+  useEffect(() => {
+    if (engine) {
+      engine.composite()
+    }
+  }, [engine, width, height, layerInfos, activeLayerId])
 
   const activePlugin = activePluginId ? registry.get(activePluginId) : null
   const Overlay = activePlugin?.CanvasOverlay
