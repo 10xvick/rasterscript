@@ -28,10 +28,13 @@ export function CanvasStage() {
       return
     }
 
-    // First ever mount: create engine and wait for user to load an image
+    // First ever mount: create engine and load a default blank white canvas
     const eng = new EditorEngine(canvas)
     store.setEngine(eng)
-    // hasImage stays false — DropZone will be shown until user loads an image
+    const settings = useSettingsStore.getState()
+    eng.loadBlank(settings.defaultWidth, settings.defaultHeight, '#ffffff')
+    store.setHasImage(true)
+    store.syncFromEngine()
   }, [])
 
   // Re-center scroll whenever zoom or canvas size changes (skipped when wheel zoom provides its own target)

@@ -17,7 +17,7 @@ export function Toolbar() {
   const { openSettings, isPluginVisible, defaultWidth, defaultHeight, defaultFill, showShortcuts, compactMode } = useSettingsStore()
   const [exportOpen, setExportOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
-  const [importOpen, setImportOpen] = useState(true)
+  const [importOpen, setImportOpen] = useState(false)
 
   const undo = () => { engine?.undo(); syncFromEngine() }
   const redo = () => { engine?.redo(); syncFromEngine() }
