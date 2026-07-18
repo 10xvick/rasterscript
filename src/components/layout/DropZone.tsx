@@ -10,10 +10,12 @@ interface DropZoneProps {
 export function DropZone({ open, onClose }: DropZoneProps) {
   const { engine, hasImage, setHasImage, syncFromEngine } = useEditorStore()
   const [over, setOver] = useState(false)
+  const [mode, setMode] = useState<'import' | 'new'>('import')
 
   if (!open) return null
 
   const isModal = !!(open && onClose)
+  const activeMode = hasImage ? mode : 'new'
 
   const importAsLayer = async (file: File) => {
     if (!engine) return
@@ -50,6 +52,17 @@ export function DropZone({ open, onClose }: DropZoneProps) {
     syncFromEngine()
   }
 
+  const importImageFromBlob = async (blob: Blob) => {
+    if (!engine) return
+    const bmp = await createImageBitmap(blob)
+    const tmp = document.createElement('canvas')
+    tmp.width = bmp.width; tmp.height = bmp.height
+    tmp.getContext('2d')!.drawImage(bmp, 0, 0)
+    const data = tmp.getContext('2d')!.getImageData(0, 0, bmp.width, bmp.height)
+    engine.importImageAsLayer(data, 'Pasted Layer')
+    syncFromEngine()
+  }
+
   const pasteFromClipboard = async () => {
     try {
       const items = await navigator.clipboard.read()
@@ -57,17 +70,23 @@ export function DropZone({ open, onClose }: DropZoneProps) {
         for (const type of item.types) {
           if (type.startsWith('image/')) {
             const blob = await item.getType(type)
-            await loadImageFromBlob(blob)
+            if (activeMode === 'import') {
+              await importImageFromBlob(blob)
+            } else {
+              await loadImageFromBlob(blob)
+            }
             return
           }
         }
       }
-    } catch { }
+    } catch (err) {
+      console.warn('Clipboard read failed:', err)
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation(); setOver(false)
-    if (hasImage) loadAsLayers(e.dataTransfer.files)
+    if (activeMode === 'import') loadAsLayers(e.dataTransfer.files)
     else loadFiles(e.dataTransfer.files)
     onClose?.()
   }
@@ -77,7 +96,7 @@ export function DropZone({ open, onClose }: DropZoneProps) {
     input.type = 'file'; input.accept = 'image/*'; input.multiple = true
     input.onchange = () => {
       if (!input.files?.length) return
-      if (hasImage) loadAsLayers(input.files)
+      if (activeMode === 'import') loadAsLayers(input.files)
       else loadFiles(input.files)
     }
     input.click()
@@ -97,14 +116,40 @@ export function DropZone({ open, onClose }: DropZoneProps) {
       onDrop={handleDrop}
     >
       <div className={`border-2 border-dashed rounded-2xl p-12 text-center transition-colors ${over ? 'border-violet-400' : 'border-neutral-600'}`}>
-        <ImagePlus size={48} className="mx-auto mb-4 text-neutral-500" />
-        <p className="text-neutral-300 text-lg font-medium">Drop images to start</p>
-        <p className="text-neutral-500 text-sm mt-1">Multiple files — each becomes a layer</p>
+        {hasImage && (
+          <div className="flex bg-neutral-900 border border-neutral-800 rounded-lg p-0.5 mb-5 max-w-xs mx-auto">
+            <button
+              onClick={() => setMode('import')}
+              className={`flex-1 py-1 px-3 text-xs font-semibold rounded-md transition-colors ${activeMode === 'import' ? 'bg-violet-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
+            >
+              Import as Layers
+            </button>
+            <button
+              onClick={() => setMode('new')}
+              className={`flex-1 py-1 px-3 text-xs font-semibold rounded-md transition-colors ${activeMode === 'new' ? 'bg-violet-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
+            >
+              Open New Canvas
+            </button>
+          </div>
+        )}
 
-        <p className="text-neutral-500 text-sm mt-1">or</p>
-        <div className="flex items-center justify-center gap-3 mt-3">
+        <ImagePlus size={48} className="mx-auto mb-4 text-neutral-500" />
+        
+        <p className="text-neutral-300 text-lg font-medium">
+          {activeMode === 'import' ? 'Drop images to import as layers' : 'Drop images to open new canvas'}
+        </p>
+        
+        <p className="text-neutral-500 text-sm mt-1">
+          {activeMode === 'import'
+            ? 'Each file will be added as a new layer to the current document'
+            : 'Multiple files — first becomes background, others become layers'}
+        </p>
+
+        <p className="text-neutral-500 text-sm mt-3.5">or</p>
+        
+        <div className="flex items-center justify-center gap-3 mt-3.5">
           <button
-            className="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-colors"
+            className="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-colors text-white"
             onClick={handleBrowse}
           >
             Browse files
