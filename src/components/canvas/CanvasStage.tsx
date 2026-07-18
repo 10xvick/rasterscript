@@ -28,13 +28,9 @@ export function CanvasStage() {
       return
     }
 
-    // First ever mount: create engine and load a default blank white canvas
+    // First ever mount: create engine and wait for user to load an image
     const eng = new EditorEngine(canvas)
     store.setEngine(eng)
-    const settings = useSettingsStore.getState()
-    eng.loadBlank(settings.defaultWidth, settings.defaultHeight, '#ffffff')
-    store.setHasImage(true)
-    store.syncFromEngine()
   }, [])
 
   // Re-center scroll whenever zoom or canvas size changes (skipped when wheel zoom provides its own target)

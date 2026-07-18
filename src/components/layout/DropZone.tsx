@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ImagePlus, Clipboard, X } from 'lucide-react'
 import { useEditorStore } from '../../store/useEditorStore'
+import { useSettingsStore } from '../../store/useSettingsStore'
 
 interface DropZoneProps {
   open?: boolean
@@ -109,6 +110,15 @@ export function DropZone({ open, onClose, importOnly }: DropZoneProps) {
     onClose?.()
   }
 
+  const handleCreateBlank = () => {
+    if (!engine) return
+    const settings = useSettingsStore.getState()
+    engine.loadBlank(settings.defaultWidth, settings.defaultHeight, '#ffffff')
+    setHasImage(true)
+    syncFromEngine()
+    onClose?.()
+  }
+
   const content = (
     <div
       className={`flex flex-col items-center justify-center gap-4 transition-colors ${over ? 'bg-violet-950/80' : 'bg-neutral-950/80'}`}
@@ -162,6 +172,14 @@ export function DropZone({ open, onClose, importOnly }: DropZoneProps) {
             <Clipboard size={16} />
             Paste image
           </button>
+          {activeMode === 'new' && (
+            <button
+              className="px-5 py-2 rounded-lg border border-neutral-700 text-neutral-300 hover:bg-neutral-800 text-sm font-medium transition-colors"
+              onClick={handleCreateBlank}
+            >
+              Create Blank Canvas
+            </button>
+          )}
         </div>
       </div>
     </div>
