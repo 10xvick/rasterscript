@@ -5,9 +5,10 @@ import { useEditorStore } from '../../store/useEditorStore'
 interface DropZoneProps {
   open?: boolean
   onClose?: () => void
+  importOnly?: boolean
 }
 
-export function DropZone({ open, onClose }: DropZoneProps) {
+export function DropZone({ open, onClose, importOnly }: DropZoneProps) {
   const { engine, hasImage, setHasImage, syncFromEngine } = useEditorStore()
   const [over, setOver] = useState(false)
   const [mode, setMode] = useState<'import' | 'new'>('import')
@@ -15,7 +16,7 @@ export function DropZone({ open, onClose }: DropZoneProps) {
   if (!open) return null
 
   const isModal = !!(open && onClose)
-  const activeMode = hasImage ? mode : 'new'
+  const activeMode = importOnly ? 'import' : (hasImage ? mode : 'new')
 
   const importAsLayer = async (file: File) => {
     if (!engine) return
@@ -116,7 +117,7 @@ export function DropZone({ open, onClose }: DropZoneProps) {
       onDrop={handleDrop}
     >
       <div className={`border-2 border-dashed rounded-2xl p-12 text-center transition-colors ${over ? 'border-violet-400' : 'border-neutral-600'}`}>
-        {hasImage && (
+        {hasImage && !importOnly && (
           <div className="flex bg-neutral-900 border border-neutral-800 rounded-lg p-0.5 mb-5 max-w-xs mx-auto">
             <button
               onClick={() => setMode('import')}
