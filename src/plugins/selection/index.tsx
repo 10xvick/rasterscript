@@ -224,7 +224,7 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
         onPointerMove={onBgMove}
         onPointerUp={onBgUp}
       />
-      <div className="absolute inset-0 w-full h-full pointer-events-none">
+      <div className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 11 }}>
         {sr && (
           <>
             <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(0,0,0,0.3)', pointerEvents: 'none' }} />
