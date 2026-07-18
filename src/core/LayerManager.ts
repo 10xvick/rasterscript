@@ -132,16 +132,41 @@ export class LayerManager {
     ;[this._layers[i], this._layers[j]] = [this._layers[j], this._layers[i]]
   }
 
-  /** Add a new layer with image data placed at exact pixel position (no scaling/centering) */
+  /** Add a new layer with image data placed at exact pixel position (no scaling/centering), expanding canvas bounds if necessary */
   addLayerAt(data: ImageData, x: number, y: number, name?: string): LayerInfo {
     if (this._width === 0 || this._height === 0) {
       this._width  = data.width
       this._height = data.height
     }
+
+    const newMinX = Math.min(0, x)
+    const newMinY = Math.min(0, y)
+    const newMaxX = Math.max(this._width, x + data.width)
+    const newMaxY = Math.max(this._height, y + data.height)
+
+    const newW = newMaxX - newMinX
+    const newH = newMaxY - newMinY
+
+    if (newW > this._width || newH > this._height) {
+      const dx = -newMinX
+      const dy = -newMinY
+      for (const layer of this._layers) {
+        const c = mkCanvas(newW, newH)
+        c.getContext('2d', { willReadFrequently: true })!.drawImage(layer.canvas, dx, dy)
+        layer.canvas = c
+      }
+      this._width  = newW
+      this._height = newH
+    }
+
     const layer = this._make(name ?? `Layer ${this._layers.length + 1}`, this._width, this._height)
     const tmp = mkCanvas(data.width, data.height)
     tmp.getContext('2d', { willReadFrequently: true })!.putImageData(data, 0, 0)
-    layer.canvas.getContext('2d', { willReadFrequently: true })!.drawImage(tmp, x, y)
+    
+    const drawX = x - newMinX
+    const drawY = y - newMinY
+    layer.canvas.getContext('2d', { willReadFrequently: true })!.drawImage(tmp, drawX, drawY)
+    
     this._layers.push(layer)
     this._activeId = layer.id
     return { id: layer.id, name: layer.name, visible: layer.visible, opacity: layer.opacity, blendMode: layer.blendMode }
