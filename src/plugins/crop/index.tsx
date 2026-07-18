@@ -117,7 +117,7 @@ function CropPanel({ context, onApply }: CropPanelProps) {
 
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
-function CropOverlay({ context }: PluginOverlayProps) {
+function CropOverlay({ context, containerRef }: PluginOverlayProps) {
   const zoom = useEditorStore(s => s.zoom)
   const cropRect = useEditorStore(s => s.cropRect)
   const setCropRect = useEditorStore(s => s.setCropRect)
@@ -127,12 +127,15 @@ function CropOverlay({ context }: PluginOverlayProps) {
   const start = useRef({ x: 0, y: 0 })
 
   const getCanvasPoint = useCallback((e: React.PointerEvent) => {
-    const r = divRef.current!.getBoundingClientRect()
+    if (!containerRef.current) return { x: 0, y: 0 }
+    const r = containerRef.current.getBoundingClientRect()
+    const rawX = (e.clientX - r.left) * context.getWidth()  / r.width
+    const rawY = (e.clientY - r.top)  * context.getHeight() / r.height
     return {
-      x: (e.clientX - r.left) * context.getWidth()  / r.width,
-      y: (e.clientY - r.top)  * context.getHeight() / r.height,
+      x: Math.max(0, Math.min(context.getWidth(), rawX)),
+      y: Math.max(0, Math.min(context.getHeight(), rawY)),
     }
-  }, [context])
+  }, [context, containerRef])
 
   const onPointerDown = (e: React.PointerEvent) => {
     const p = getCanvasPoint(e)
@@ -140,7 +143,9 @@ function CropOverlay({ context }: PluginOverlayProps) {
     const newRect = { x: Math.round(p.x), y: Math.round(p.y), w: 0, h: 0 }
     setCropRect(newRect)
     setDragging(true);
-    (e.target as Element).setPointerCapture(e.pointerId)
+    if (divRef.current) {
+      divRef.current.setPointerCapture(e.pointerId)
+    }
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -167,37 +172,46 @@ function CropOverlay({ context }: PluginOverlayProps) {
   } : null
 
   return (
-    <div
-      ref={divRef}
-      className="absolute inset-0 w-full h-full cursor-crosshair"
-      style={{ zIndex: 10 }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-    >
-      {screenRect && (
-        <>
-          <div
-            className="absolute"
-            style={{
-              inset: 0,
-              backgroundColor: 'rgba(0,0,0,0.45)',
-              pointerEvents: 'none',
-            }}
-          />
-          <div
-            className="absolute border-2 border-dashed border-white"
-            style={{
-              left: screenRect.x,
-              top: screenRect.y,
-              width: screenRect.w,
-              height: screenRect.h,
-              pointerEvents: 'none',
-            }}
-          />
-        </>
-      )}
-    </div>
+    <>
+      <div
+        ref={divRef}
+        className="absolute cursor-crosshair"
+        style={{
+          left: -2000,
+          top: -2000,
+          right: -2000,
+          bottom: -2000,
+          zIndex: 10,
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      />
+      <div className="absolute inset-0 w-full h-full pointer-events-none">
+        {screenRect && (
+          <>
+            <div
+              className="absolute"
+              style={{
+                inset: 0,
+                backgroundColor: 'rgba(0,0,0,0.45)',
+                pointerEvents: 'none',
+              }}
+            />
+            <div
+              className="absolute border-2 border-dashed border-white"
+              style={{
+                left: screenRect.x,
+                top: screenRect.y,
+                width: screenRect.w,
+                height: screenRect.h,
+                pointerEvents: 'none',
+              }}
+            />
+          </>
+        )}
+      </div>
+    </>
   )
 }
 

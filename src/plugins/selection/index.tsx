@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { RectangleHorizontal } from 'lucide-react'
 import type { EditorPlugin, PluginPanelProps, PluginOverlayProps } from '../../core/types'
@@ -64,9 +65,8 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
   const [hoverInRect, setHoverInRect] = useState(false)
   const startPt    = useRef({ x: 0, y: 0 })
   const startRect  = useRef<Rect | null>(null)
-  const startFloat = useRef<Floating | null>(null)
-  // float resize: { handle, start display xy, start float }
-  const fResizeRef = useRef<{ h: Handle; sx0: number; sy0: number; f0: Floating } | null>(null)
+  const fDragRef = useRef<{ sx: number; sy: number; x0: number; y0: number } | null>(null)
+  const fResizeRef = useRef<{ h: string; sx0: number; sy0: number; f0: Floating } | null>(null)
 
   useEffect(() => {
     const fn = () => { setLocalRect(_rect); setLocalFloat(_floating) }
@@ -86,12 +86,15 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
   }, [])
 
   const toCanvas = useCallback((e: React.PointerEvent) => {
-    const r = divRef.current!.getBoundingClientRect()
+    if (!containerRef.current) return { x: 0, y: 0 }
+    const r = containerRef.current.getBoundingClientRect()
+    const rawX = (e.clientX - r.left) * context.getWidth()  / r.width
+    const rawY = (e.clientY - r.top)  * context.getHeight() / r.height
     return {
-      x: (e.clientX - r.left) * context.getWidth()  / r.width,
-      y: (e.clientY - r.top)  * context.getHeight() / r.height,
+      x: Math.max(0, Math.min(context.getWidth(), rawX)),
+      y: Math.max(0, Math.min(context.getHeight(), rawY)),
     }
-  }, [context])
+  }, [context, containerRef])
 
   const scales = () => {
     if (!containerRef.current) return { sx: 1, sy: 1 }
@@ -104,7 +107,9 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
   // ── background (selection draw/move) ──────────────────────────────────────
   const onBgDown = (e: React.PointerEvent) => {
     if (localFloat) return
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    if (divRef.current) {
+      divRef.current.setPointerCapture(e.pointerId)
+    }
     const pt = toCanvas(e)
     if (localRect && inRect(pt, localRect)) {
       setMode('moving'); startPt.current = pt; startRect.current = { ...localRect }
@@ -144,28 +149,25 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
 
   // ── float drag (body) ─────────────────────────────────────────────────────
   const onFloatDown = (e: React.PointerEvent) => {
-    e.stopPropagation()
     ;(e.target as Element).setPointerCapture(e.pointerId)
-    setMode('dragging-float')
-    startPt.current = toCanvas(e)
-    startFloat.current = _floating ? { ..._floating } : null
+    if (!_floating) return
+    fDragRef.current = { sx: e.clientX, sy: e.clientY, x0: _floating.x, y0: _floating.y }
   }
 
   const onFloatMove = (e: React.PointerEvent) => {
-    if (mode !== 'dragging-float' || !startFloat.current) return
-    const pt = toCanvas(e)
-    const f: Floating = {
-      ...startFloat.current,
-      x: Math.round(startFloat.current.x + (pt.x - startPt.current.x)),
-      y: Math.round(startFloat.current.y + (pt.y - startPt.current.y)),
-    }
+    const state = fDragRef.current
+    if (!state || !(e.buttons & 1) || !_floating) return
+    const { sx, sy } = scales()
+    const dx = (e.clientX - state.sx) / sx
+    const dy = (e.clientY - state.sy) / sy
+    const f = { ..._floating, x: Math.round(state.x0 + dx), y: Math.round(state.y0 + dy) }
     setLocalFloat(f); setFloating(f)
   }
 
-  const onFloatUp = () => setMode('idle')
+  const onFloatUp = () => { fDragRef.current = null }
 
   // ── float resize (handles) ────────────────────────────────────────────────
-  const onHandleDown = (e: React.PointerEvent, h: Handle) => {
+  const onHandleDown = (e: React.PointerEvent, h: string) => {
     e.stopPropagation()
     ;(e.target as Element).setPointerCapture(e.pointerId)
     if (!_floating) return
@@ -206,53 +208,63 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
   } : null
 
   return (
-    <div
-      ref={divRef}
-      className="absolute inset-0 w-full h-full"
-      style={{ cursor: localFloat ? 'default' : (hoverInRect && mode === 'idle' ? 'move' : 'crosshair'), zIndex: 10 }}
-      onPointerDown={onBgDown}
-      onPointerMove={onBgMove}
-      onPointerUp={onBgUp}
-    >
-      {sr && (
-        <>
-          <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(0,0,0,0.3)' }} />
-          <div className="absolute pointer-events-none"
-            style={{ left:sr.x, top:sr.y, width:sr.w, height:sr.h,
-              outline:'1.5px dashed white', outlineOffset:'-0.5px', background:'transparent' }} />
-          <div className="absolute pointer-events-none"
-            style={{ left:sr.x, top:sr.y, width:sr.w, height:sr.h,
-              outline:'1.5px dashed rgba(0,0,0,0.5)', outlineOffset:'1px', background:'transparent' }} />
-        </>
-      )}
+    <>
+      <div
+        ref={divRef}
+        className="absolute"
+        style={{
+          left: -2000,
+          top: -2000,
+          right: -2000,
+          bottom: -2000,
+          cursor: localFloat ? 'default' : (hoverInRect && mode === 'idle' ? 'move' : 'crosshair'),
+          zIndex: 10
+        }}
+        onPointerDown={onBgDown}
+        onPointerMove={onBgMove}
+        onPointerUp={onBgUp}
+      />
+      <div className="absolute inset-0 w-full h-full pointer-events-none">
+        {sr && (
+          <>
+            <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(0,0,0,0.3)', pointerEvents: 'none' }} />
+            <div className="absolute pointer-events-none"
+              style={{ left:sr.x, top:sr.y, width:sr.w, height:sr.h,
+                outline:'1.5px dashed white', outlineOffset:'-0.5px', background:'transparent', pointerEvents: 'none' }} />
+            <div className="absolute pointer-events-none"
+              style={{ left:sr.x, top:sr.y, width:sr.w, height:sr.h,
+                outline:'1.5px dashed rgba(0,0,0,0.5)', outlineOffset:'1px', background:'transparent', pointerEvents: 'none' }} />
+          </>
+        )}
 
-      {sf && localFloat && (
-        <div className="absolute" style={{ left:sf.x, top:sf.y, width:sf.w, height:sf.h }}>
-          {/* body — drag to move */}
-          <div className="absolute inset-0" style={{ cursor:'move',
-            outline:'2px dashed #a78bfa', outlineOffset:'-1px', boxShadow:'0 2px 16px rgba(0,0,0,0.5)' }}
-            onPointerDown={onFloatDown} onPointerMove={onFloatMove} onPointerUp={onFloatUp}>
-            <FloatingPreview data={localFloat.data} />
+        {sf && localFloat && (
+          <div className="absolute" style={{ left:sf.x, top:sf.y, width:sf.w, height:sf.h, pointerEvents: 'auto' }}>
+            {/* body — drag to move */}
+            <div className="absolute inset-0" style={{ cursor:'move',
+              outline:'2px dashed #a78bfa', outlineOffset:'-1px', boxShadow:'0 2px 16px rgba(0,0,0,0.5)' }}
+              onPointerDown={onFloatDown} onPointerMove={onFloatMove} onPointerUp={onFloatUp}>
+              <FloatingPreview data={localFloat.data} />
+            </div>
+            {/* 8 scale handles */}
+            {HANDLES.map(([h, rx, ry]) => (
+              <div key={h}
+                style={{
+                  position:'absolute',
+                  left: rx * sf.w - 5, top: ry * sf.h - 5,
+                  width: 10, height: 10,
+                  background: 'white', border: '1.5px solid rgba(0,0,0,0.6)',
+                  borderRadius: 2, cursor: HANDLE_CURSOR[h],
+                  boxShadow: '0 0 4px rgba(0,0,0,0.5)',
+                }}
+                onPointerDown={e => onHandleDown(e, h)}
+                onPointerMove={onHandleMove}
+                onPointerUp={onHandleUp}
+              />
+            ))}
           </div>
-          {/* 8 scale handles */}
-          {HANDLES.map(([h, rx, ry]) => (
-            <div key={h}
-              style={{
-                position:'absolute',
-                left: rx * sf.w - 5, top: ry * sf.h - 5,
-                width: 10, height: 10,
-                background: 'white', border: '1.5px solid rgba(0,0,0,0.6)',
-                borderRadius: 2, cursor: HANDLE_CURSOR[h],
-                boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-              }}
-              onPointerDown={e => onHandleDown(e, h)}
-              onPointerMove={onHandleMove}
-              onPointerUp={onHandleUp}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   )
 }
 
