@@ -5,7 +5,6 @@ import type { EditorPlugin, PluginPanelProps, PluginOverlayProps } from '../../c
 import { useEditorStore } from '../../store/useEditorStore'
 
 interface Rect      { x: number; y: number; w: number; h: number }
-interface Clipboard { data: ImageData; x: number; y: number; w: number; h: number }
 interface Floating  { data: ImageData; x: number; y: number; w: number; h: number }
 
 type Handle = 'tl'|'tc'|'tr'|'ml'|'mr'|'bl'|'bc'|'br'
@@ -18,28 +17,6 @@ const HANDLE_CURSOR: Record<Handle,string> = {
   tl:'nwse-resize', tc:'ns-resize', tr:'nesw-resize',
   ml:'ew-resize',                   mr:'ew-resize',
   bl:'nesw-resize', bc:'ns-resize', br:'nwse-resize',
-}
-
-// ─── Module-level shared state (overlay ↔ panel) ─────────────────────────────
-
-type Listener = () => void
-const listeners = new Set<Listener>()
-let _rect: Rect | null = null
-let _clipboard: Clipboard | null = null
-let _floating: Floating | null = null
-
-function notify() { listeners.forEach(fn => fn()) }
-function setRect(r: Rect | null)       { _rect     = r; notify() }
-function setFloating(f: Floating|null) { _floating = f; notify() }
-
-function useSelectionState() {
-  const [, tick] = useState(0)
-  useEffect(() => {
-    const fn = () => tick(n => n + 1)
-    listeners.add(fn)
-    return () => { listeners.delete(fn) }
-  }, [])
-  return { rect: _rect, floating: _floating }
 }
 
 // ─── Floating canvas preview ──────────────────────────────────────────────────
@@ -58,9 +35,13 @@ function FloatingPreview({ data }: { data: ImageData }) {
 
 function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
   const divRef  = useRef<HTMLDivElement>(null)
-  const zoom    = useEditorStore(s => s.zoom)   // subscribe so overlay re-renders on zoom change
-  const [localRect,  setLocalRect]  = useState<Rect | null>(_rect)
-  const [localFloat, setLocalFloat] = useState<Floating | null>(_floating)
+  const zoom    = useEditorStore(s => s.zoom)
+  const rect    = useEditorStore(s => s.selection.rect)
+  const floating = useEditorStore(s => s.selection.floating)
+  const setSelection = useEditorStore(s => s.setSelection)
+
+  const [localRect,  setLocalRect]  = useState<Rect | null>(rect)
+  const [localFloat, setLocalFloat] = useState<Floating | null>(floating)
   const [mode, setMode] = useState<'idle'|'drawing'|'moving'|'dragging-float'>('idle')
   const [hoverInRect, setHoverInRect] = useState(false)
   const startPt    = useRef({ x: 0, y: 0 })
@@ -69,21 +50,19 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
   const fResizeRef = useRef<{ h: string; sx0: number; sy0: number; f0: Floating } | null>(null)
 
   useEffect(() => {
-    const fn = () => { setLocalRect(_rect); setLocalFloat(_floating) }
-    listeners.add(fn)
-    return () => { listeners.delete(fn) }
-  }, [])
+    setLocalRect(rect)
+    setLocalFloat(floating)
+  }, [rect, floating])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setFloating(null)
-        setRect(null)
+        setSelection({ rect: null, floating: null })
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [setSelection])
 
   const toCanvas = useCallback((e: React.PointerEvent) => {
     if (!containerRef.current) return { x: 0, y: 0 }
@@ -116,7 +95,7 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
     } else {
       setMode('drawing'); startPt.current = pt
       const r = { x: pt.x, y: pt.y, w: 0, h: 0 }
-      setLocalRect(r); setRect(r)
+      setLocalRect(r); setSelection({ rect: r })
     }
   }
 
@@ -132,7 +111,7 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
         w: Math.round(Math.abs(pt.x - startPt.current.x)),
         h: Math.round(Math.abs(pt.y - startPt.current.y)),
       }
-      setLocalRect(r); setRect(r)
+      setLocalRect(r); setSelection({ rect: r })
     } else if (mode === 'moving' && startRect.current) {
       const cw = context.getWidth(), ch = context.getHeight()
       const dx = pt.x - startPt.current.x, dy = pt.y - startPt.current.y
@@ -141,7 +120,7 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
         y: Math.round(Math.max(0, Math.min(startRect.current.y+dy, ch-startRect.current.h))),
         w: startRect.current.w, h: startRect.current.h,
       }
-      setLocalRect(r); setRect(r)
+      setLocalRect(r); setSelection({ rect: r })
     }
   }
 
@@ -150,35 +129,35 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
   // ── float drag (body) ─────────────────────────────────────────────────────
   const onFloatDown = (e: React.PointerEvent) => {
     ;(e.target as Element).setPointerCapture(e.pointerId)
-    if (!_floating) return
-    fDragRef.current = { sx: e.clientX, sy: e.clientY, x0: _floating.x, y0: _floating.y }
+    if (!floating) return
+    fDragRef.current = { sx: e.clientX, sy: e.clientY, x0: floating.x, y0: floating.y }
   }
 
   const onFloatMove = (e: React.PointerEvent) => {
     const state = fDragRef.current
-    if (!state || !(e.buttons & 1) || !_floating) return
+    if (!state || !(e.buttons & 1) || !floating) return
     const { sx, sy } = scales()
     const dx = (e.clientX - state.sx) / sx
     const dy = (e.clientY - state.sy) / sy
-    const f = { ..._floating, x: Math.round(state.x0 + dx), y: Math.round(state.y0 + dy) }
-    setLocalFloat(f); setFloating(f)
+    const f = { ...floating, x: Math.round(state.x0 + dx), y: Math.round(state.y0 + dy) }
+    setLocalFloat(f); setSelection({ floating: f })
   }
 
   const onFloatUp = () => { fDragRef.current = null }
 
-  // ── float resize (handles) ────────────────────────────────────────────────
+  // ── float resize (8 handles) ──────────────────────────────────────────────
   const onHandleDown = (e: React.PointerEvent, h: string) => {
     e.stopPropagation()
     ;(e.target as Element).setPointerCapture(e.pointerId)
-    if (!_floating) return
-    fResizeRef.current = { h, sx0: e.clientX, sy0: e.clientY, f0: { ..._floating } }
+    if (!floating) return
+    fResizeRef.current = { h, sx0: e.clientX, sy0: e.clientY, f0: { ...floating } }
   }
 
   const onHandleMove = (e: React.PointerEvent) => {
     const state = fResizeRef.current
     if (!state || !(e.buttons & 1)) return
     const { sx, sy } = scales()
-    const ddx = (e.clientX - state.sx0) / sx  // delta in canvas px
+    const ddx = (e.clientX - state.sx0) / sx
     const ddy = (e.clientY - state.sy0) / sy
     const o = state.f0
     let { x, y, w, h } = o
@@ -189,13 +168,12 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
     if (w < 10) { if (state.h.includes('l')) x = o.x + o.w - 10; w = 10 }
     if (h < 10) { if (state.h.includes('t')) y = o.y + o.h - 10; h = 10 }
     const f: Floating = { data: o.data, x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) }
-    setLocalFloat(f); setFloating(f)
+    setLocalFloat(f); setSelection({ floating: f })
   }
 
   const onHandleUp = () => { fResizeRef.current = null }
 
   if (!containerRef.current) return null
-  // zoom is subscribed at top of component — always current, triggers re-render on change.
 
   const sr = localRect && localRect.w > 1 && localRect.h > 1 && !localFloat ? {
     x: localRect.x * zoom, y: localRect.y * zoom,
@@ -271,14 +249,18 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
 function SelectionPanel({ context }: PluginPanelProps) {
-  const { rect, floating } = useSelectionState()
+  const rect = useEditorStore(s => s.selection.rect)
+  const floating = useEditorStore(s => s.selection.floating)
+  const clipboard = useEditorStore(s => s.selection.clipboard)
+  const setSelection = useEditorStore(s => s.setSelection)
+
   const [localRect, setLocalRect] = useState<Rect>({ x: 0, y: 0, w: 0, h: 0 })
   const [floatPos, setFloatPos] = useState({ x: 0, y: 0 })
 
   useEffect(() => { if (rect) setLocalRect(rect) }, [rect])
   useEffect(() => { if (floating) setFloatPos({ x: floating.x, y: floating.y }) }, [floating])
 
-  const applyInputRect = () => { if (localRect.w > 0 && localRect.h > 0) setRect(localRect) }
+  const applyInputRect = () => { if (localRect.w > 0 && localRect.h > 0) setSelection({ rect: localRect }) }
 
   const copyToSystemClipboard = async (data: ImageData) => {
     const tmp = document.createElement('canvas')
@@ -293,37 +275,41 @@ function SelectionPanel({ context }: PluginPanelProps) {
   }
 
   const doCopy = useCallback(() => {
-    if (!_rect || _rect.w < 1 || _rect.h < 1) return
+    if (!rect || rect.w < 1 || rect.h < 1) return
     const data = context.canvas.getContext('2d', { willReadFrequently: true })!.getImageData(
-      Math.round(_rect.x), Math.round(_rect.y), Math.round(_rect.w), Math.round(_rect.h)
+      Math.round(rect.x), Math.round(rect.y), Math.round(rect.w), Math.round(rect.h)
     )
-    _clipboard = { data, x: Math.round(_rect.x), y: Math.round(_rect.y), w: Math.round(_rect.w), h: Math.round(_rect.h) }
+    const clip = { data, x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.w), h: Math.round(rect.h) }
+    setSelection({ clipboard: clip })
     copyToSystemClipboard(data)
-  }, [context])
+  }, [context, rect, setSelection])
 
   const doCut = useCallback(() => {
-    if (!_rect || _rect.w < 1 || _rect.h < 1) return
+    if (!rect || rect.w < 1 || rect.h < 1) return
     const lc = context.getActiveLayerCtx()
     if (!lc) return
-    const { x, y, w, h } = _rect
+    const { x, y, w, h } = rect
     const ix = Math.round(x), iy = Math.round(y), iw = Math.round(w), ih = Math.round(h)
     const data = lc.getImageData(ix, iy, iw, ih)
-    _clipboard = { data, x: ix, y: iy, w: iw, h: ih }
+    const clip = { data, x: ix, y: iy, w: iw, h: ih }
+    setSelection({ clipboard: clip })
     lc.clearRect(ix, iy, iw, ih)
     context.compositeToCanvas(); context.pushHistory('Cut')
     copyToSystemClipboard(data)
-  }, [context])
+  }, [context, rect, setSelection])
 
   const doPaste = useCallback(() => {
-    if (!_clipboard) return
-    setFloating({
-      data: _clipboard.data,
-      x: _clipboard.x,
-      y: _clipboard.y,
-      w: _clipboard.w,
-      h: _clipboard.h,
+    if (!clipboard) return
+    setSelection({
+      floating: {
+        data: clipboard.data,
+        x: clipboard.x,
+        y: clipboard.y,
+        w: clipboard.w,
+        h: clipboard.h,
+      }
     })
-  }, [context])
+  }, [clipboard, setSelection])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -338,8 +324,8 @@ function SelectionPanel({ context }: PluginPanelProps) {
   }, [doCopy, doCut, doPaste])
 
   const doPlace = useCallback(() => {
-    if (!_floating) return
-    const { data, x, y, w, h } = _floating
+    if (!floating) return
+    const { data, x, y, w, h } = floating
     let finalData = data
     if (Math.round(w) !== data.width || Math.round(h) !== data.height) {
       const src = document.createElement('canvas')
@@ -351,9 +337,8 @@ function SelectionPanel({ context }: PluginPanelProps) {
       finalData = dst.getContext('2d')!.getImageData(0, 0, dst.width, dst.height)
     }
     context.pasteAsLayer(finalData, x, y, 'Pasted')
-    setFloating(null)
-    setRect(null)
-  }, [context])
+    setSelection({ floating: null, rect: null })
+  }, [context, floating, setSelection])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -364,10 +349,10 @@ function SelectionPanel({ context }: PluginPanelProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [doPlace])
 
-  const cancelFloat = () => { setFloating(null); setRect(null) }
+  const cancelFloat = () => { setSelection({ floating: null, rect: null }) }
 
   const applyFloatPos = () => {
-    if (_floating) setFloating({ ..._floating, x: floatPos.x, y: floatPos.y })
+    if (floating) setSelection({ floating: { ...floating, x: floatPos.x, y: floatPos.y } })
   }
 
   const inputCls = 'w-full bg-neutral-800 border border-neutral-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-violet-500'
@@ -414,7 +399,7 @@ function SelectionPanel({ context }: PluginPanelProps) {
   }
 
   const hasSel = !!(rect && rect.w > 1 && rect.h > 1)
-  const hasClip = !!_clipboard
+  const hasClip = !!clipboard
 
   return (
     <div className="p-3 space-y-3">
@@ -441,7 +426,7 @@ function SelectionPanel({ context }: PluginPanelProps) {
       <div className="flex gap-2">
         {btn('Paste', doPaste, hasClip, 'primary')}
       </div>
-      {btn('Clear selection', () => setRect(null), hasSel, 'secondary')}
+      {btn('Clear selection', () => setSelection({ rect: null }), hasSel, 'secondary')}
       <div className="border-t border-neutral-800 pt-2 text-[10px] text-neutral-600 space-y-0.5">
         <p>Drag to select · drag inside to move</p>
         <p>Ctrl+C / X / V · Esc to deselect</p>
@@ -462,6 +447,7 @@ export const selectionPlugin: EditorPlugin = {
   Panel: SelectionPanel,
   CanvasOverlay: SelectionOverlay,
   deactivate: () => {
-    if (_floating) { _floating = null; notify() }
+    // Clear active selection borders and floating layers on deactivation to prevent leaking overlays
+    useEditorStore.getState().setSelection({ rect: null, floating: null })
   },
 }

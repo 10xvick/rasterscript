@@ -30,12 +30,24 @@ export interface SpritesheetState {
   isFromActiveLayer: boolean
 }
 
+export interface SelectionState {
+  rect: { x: number; y: number; w: number; h: number } | null
+  floating: { data: ImageData; x: number; y: number; w: number; h: number } | null
+  clipboard: { data: ImageData; x: number; y: number; w: number; h: number } | null
+}
+
 export interface PixelationState {
   blockSize: number
   paletteStyle: 'true-color' | 'monochrome' | 'pico-8' | 'gameboy' | 'cga' | 'posterized'
   posterizeLevels: number
   ditherStrength: number
   previewTarget: 'active' | 'composite'
+}
+
+const INITIAL_SELECTION_STATE: SelectionState = {
+  rect: null,
+  floating: null,
+  clipboard: null,
 }
 
 const INITIAL_PIXELATION_STATE: PixelationState = {
@@ -115,6 +127,11 @@ interface EditorState {
   setSpritesheet: (update: Partial<SpritesheetState> | ((prev: SpritesheetState) => Partial<SpritesheetState>)) => void
   resetSpritesheet: () => void
 
+  // Selection state
+  selection: SelectionState
+  setSelection: (update: Partial<SelectionState> | ((prev: SelectionState) => Partial<SelectionState>)) => void
+  resetSelection: () => void
+
   // Crop synchronization
   cropRect: { x: number; y: number; w: number; h: number } | null
   setCropRect: (r: { x: number; y: number; w: number; h: number } | null) => void
@@ -145,6 +162,9 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
     b: isNaN(b) ? 0 : b,
   }
 }
+
+let lastSpritesheetSyncTime = 0
+let spritesheetSyncTimeout: ReturnType<typeof setTimeout> | null = null
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   engine: null,
@@ -184,6 +204,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     const spritesheet = get().spritesheet
     if (spritesheet.isFromActiveLayer && spritesheet.file) {
+      const now = Date.now()
+      if (now - lastSpritesheetSyncTime < 200) {
+        if (spritesheetSyncTimeout) clearTimeout(spritesheetSyncTimeout)
+        spritesheetSyncTimeout = setTimeout(() => {
+          get().syncFromEngine()
+        }, 200)
+        return
+      }
+      
+      lastSpritesheetSyncTime = now
+      if (spritesheetSyncTimeout) {
+        clearTimeout(spritesheetSyncTimeout)
+        spritesheetSyncTimeout = null
+      }
+
       const actCtx = e.getContext().getActiveLayerCtx()
       if (actCtx && actCtx.canvas.width > 0 && actCtx.canvas.height > 0) {
         const layerCanvas = actCtx.canvas
@@ -259,6 +294,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
   })),
   resetSpritesheet: () => set({ spritesheet: INITIAL_SPRITESHEET_STATE }),
+
+  selection: INITIAL_SELECTION_STATE,
+  setSelection: (update) => set((state) => ({
+    selection: {
+      ...state.selection,
+      ...(typeof update === 'function' ? update(state.selection) : update)
+    }
+  })),
+  resetSelection: () => set({ selection: INITIAL_SELECTION_STATE }),
+
   cropRect: null,
   setCropRect: (cropRect) => set({ cropRect }),
 

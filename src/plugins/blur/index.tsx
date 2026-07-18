@@ -20,7 +20,11 @@ function applyBlurAtPoint(
   size: number,
   strength: number,
   hardness: number,
-  opacity: number
+  opacity: number,
+  sourceCanvas: HTMLCanvasElement,
+  blurCanvas: HTMLCanvasElement,
+  maskCanvas: HTMLCanvasElement,
+  blendCanvas: HTMLCanvasElement
 ) {
   const r = size / 2
   const sx = Math.floor(x - r)
@@ -52,7 +56,6 @@ function applyBlurAtPoint(
   if (intersectW <= 0 || intersectH <= 0) return // completely offscreen
 
   // Copy padded original source pixels
-  const sourceCanvas = document.createElement('canvas')
   sourceCanvas.width = psw
   sourceCanvas.height = psh
   const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true })!
@@ -63,7 +66,6 @@ function applyBlurAtPoint(
   sourceCtx.drawImage(g.canvas, ix0, iy0, intersectW, intersectH, destX, destY, intersectW, intersectH)
 
   // Draw sourceCanvas to blurredCanvas with filter
-  const blurCanvas = document.createElement('canvas')
   blurCanvas.width = sw
   blurCanvas.height = sh
   const blurCtx = blurCanvas.getContext('2d')!
@@ -72,7 +74,6 @@ function applyBlurAtPoint(
   blurCtx.drawImage(sourceCanvas, -padding, -padding)
 
   // Create radial gradient mask matching the brush properties
-  const maskCanvas = document.createElement('canvas')
   maskCanvas.width = sw
   maskCanvas.height = sh
   const maskCtx = maskCanvas.getContext('2d')!
@@ -95,7 +96,6 @@ function applyBlurAtPoint(
   blurCtx.globalCompositeOperation = 'source-over'
 
   // Create blendCanvas and copy the unpadded original region
-  const blendCanvas = document.createElement('canvas')
   blendCanvas.width = sw
   blendCanvas.height = sh
   const blendCtx = blendCanvas.getContext('2d', { willReadFrequently: true })!
@@ -112,8 +112,6 @@ function applyBlurAtPoint(
   }
 
   // Draw blurCanvas on top of the original region using source-atop.
-  // source-atop draws new content on top of existing content only where it overlaps,
-  // preserving the destination alpha channel exactly.
   blendCtx.globalCompositeOperation = 'source-atop'
   blendCtx.drawImage(blurCanvas, 0, 0)
 
@@ -129,6 +127,16 @@ function BlurOverlay({ context, containerRef }: PluginOverlayProps) {
   const drawing    = useRef(false)
   const last       = useRef<{ x: number; y: number } | null>(null)
   const activeCtx  = useRef<CanvasRenderingContext2D | null>(null)
+
+  const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const blurCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const maskCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const blendCanvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  const getHelperCanvas = (ref: React.MutableRefObject<HTMLCanvasElement | null>) => {
+    if (!ref.current) ref.current = document.createElement('canvas')
+    return ref.current
+  }
 
   const settings = () => blurSettings.get(context.canvas) ?? DEFAULT_SETTINGS
 
@@ -160,6 +168,11 @@ function BlurOverlay({ context, containerRef }: PluginOverlayProps) {
     if (!g) return
     const s = settings()
 
+    const srcC = getHelperCanvas(sourceCanvasRef)
+    const blurC = getHelperCanvas(blurCanvasRef)
+    const maskC = getHelperCanvas(maskCanvasRef)
+    const blendC = getHelperCanvas(blendCanvasRef)
+
     if (from) {
       const dx = to.x - from.x
       const dy = to.y - from.y
@@ -171,10 +184,10 @@ function BlurOverlay({ context, containerRef }: PluginOverlayProps) {
         const t = i / steps
         const cx = from.x + dx * t
         const cy = from.y + dy * t
-        applyBlurAtPoint(g, cx, cy, s.size, s.strength, s.hardness, s.opacity)
+        applyBlurAtPoint(g, cx, cy, s.size, s.strength, s.hardness, s.opacity, srcC, blurC, maskC, blendC)
       }
     } else {
-      applyBlurAtPoint(g, to.x, to.y, s.size, s.strength, s.hardness, s.opacity)
+      applyBlurAtPoint(g, to.x, to.y, s.size, s.strength, s.hardness, s.opacity, srcC, blurC, maskC, blendC)
     }
 
     context.compositeToCanvas()
