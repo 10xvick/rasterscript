@@ -1,8 +1,22 @@
 # RasterScript — Modular Image Editor
 
+[![Repository](https://img.shields.io/badge/GitHub-10xvick%2Frasterscript-blue?logo=github)](https://github.com/10xvick/rasterscript)
+[![Project Board](https://img.shields.io/badge/GitHub-Project%20Board-success?logo=github)](https://github.com/users/10xvick/projects/2)
+[![TypeScript](https://img.shields.io/badge/TypeScript-~5.7-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-^6.2-646CFF?logo=vite)](https://vitejs.dev/)
+
 A **fully modular** React + TypeScript image editor built with a plugin architecture. Every feature is a self-contained plugin that can be added, removed, or extended without touching core code.
 
 🌐 **Live:** [https://10xvick.github.io/tools/image/rasterscript/](https://10xvick.github.io/tools/image/rasterscript/)
+
+---
+
+## 🔗 Quick Links
+
+- **Repository**: [https://github.com/10xvick/rasterscript](https://github.com/10xvick/rasterscript)
+- **Project Board**: [https://github.com/users/10xvick/projects/2](https://github.com/users/10xvick/projects/2)
+- **Architecture Spec**: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- **Script API Documentation**: [`SCRIPT_API.md`](./SCRIPT_API.md)
 
 ---
 
@@ -121,109 +135,15 @@ api.downloadAll(blobs, prefix)
 api.log(...args)        // Console output
 ```
 
-### Built-in Script Examples
-
-- **Slice Spritesheet** — extract cells from a grid, trim alpha, download as PNGs
-- **Remove Alpha Channel** — flatten transparency to a solid background
-- **Swap R/B Channels** — demonstrates `forEach` pixel transform
-- **Export Multi-size** — generate icon sets at multiple resolutions
-- **Threshold** — black & white conversion by luminance
-
 ---
 
-## 🛠️ Adding a New Plugin
+## 🗺️ Roadmap & Sprints
 
-1. **Create plugin file** in `src/plugins/my-plugin/index.tsx`
-2. **Implement `EditorPlugin`** interface
-3. **Register in `Editor.tsx`**:
-   ```ts
-   import { myPlugin } from '../../plugins/my-plugin'
-   const PLUGINS = [..., myPlugin]
-   ```
+Active development is tracked on the **[Project Board](https://github.com/users/10xvick/projects/2)** across feature epics:
 
-Example minimal plugin:
-
-```tsx
-import { Wand2 } from 'lucide-react'
-import type { EditorPlugin, PluginPanelProps } from '../../core/types'
-
-function MyPanel({ context }: PluginPanelProps) {
-  const apply = () => {
-    const data = context.getImageData()
-    // ... modify data.data (Uint8ClampedArray)
-    context.setImageData(data, true)
-  }
-  return <button onClick={apply}>Apply Effect</button>
-}
-
-export const myPlugin: EditorPlugin = {
-  id: 'my-plugin',
-  name: 'My Effect',
-  icon: <Wand2 size={18} />,
-  category: 'filter',
-  Panel: MyPanel,
-}
-```
-
----
-
-## 🎨 Tech Stack
-
-- **React 19** + **TypeScript**
-- **Vite** — lightning-fast dev server
-- **Tailwind CSS v4** — utility-first styling
-- **Zustand** — minimal state management
-- **Monaco Editor** — VS Code-quality script editing
-- **Lucide React** — beautiful icons
-
----
-
-## 📝 Scripts
-
-```bash
-npm run dev      # Start dev server
-npm run build    # Production build
-npm run preview  # Preview production build
-npm run lint     # Run ESLint
-```
-
----
-
-## 🧩 Design Philosophy
-
-- **Zero coupling** — plugins are isolated, engine is framework-agnostic
-- **Composable** — add/remove features by editing a single array
-- **Extensible** — user scripts can do anything the built-in tools can
-- **Maintainable** — clear separation of concerns, minimal prop drilling
-- **Type-safe** — full TypeScript coverage with strict mode
-
----
-
-## 🗺️ Roadmap
-
-- ⌨️ Keyboard shortcut editor
-- 🎨 Brush engine
-- 🔤 Text tool
-- 🔄 Non-destructive filters
-- 📦 Plugin marketplace
-- 🎞️ Animation timeline
-- 🌐 WebGPU acceleration
-- 📄 PSD import/export
-
----
-
-## 📋 Changelog
-
-- `140691e` — Replace toolbar Open Image with DropZone modal, remove duplicate layer import logic
-- `ffa2564` — Add paste button to DropZone, copy selection to system clipboard, fix crop overlay zoom
-- `c79e776` — Fix crop overlay zoom: subscribe to zoom, use divRef for coordinate conversion
-- `7c5fb34` — Add color swatches & hardness slider to doodle brush
-- `5d70ee8` — Fix crop overlay zoom: subscribe to zoom, use divRef for coordinate conversion
-- `71b87b1` — Add paste image option to DropZone and system clipboard copy for selection
-- `815efab` — Fix DropZone modal border rounding, replace LayerPanel import with shared utility
-- `d61f368` — Replace toolbar import buttons with DropZone modal, remove floating canvas import buttons
-- `61c2ac2` — Rename Open Image to Import Image, remove redundant Import/Paste toolbar buttons
-- `2fd48e9` — Add version and copyright to status bar
+1. **Editor Scripts & AI**: Editor Scripts Engine (#1), AI Assistant (#2), Extensions Marketplace (#3), Visual Blueprint (#4), 2-Way Sync (#5).
+2. **Essential Tools**: Text Tool (#7), Shapes Tool (#8), Paint Bucket (#9), Eyedropper (#10), Gradient (#11), Blur/Sharpen (#12), Clone Stamp (#13), Magic Wand & Lasso (#14).
+3. **Layer & Image Adjustments**: Color Adjustments (#15), Rulers & Guides (#16), Grid Overlay (#17), Blend Modes (#18), Info Panel (#19), Histogram (#20).
 
 ---
 
