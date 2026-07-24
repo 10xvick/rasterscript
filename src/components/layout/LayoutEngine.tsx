@@ -1,11 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useState, useEffect, useReducer, createContext, useContext, useRef } from 'react'
-import { Columns, Rows, X, LayoutDashboard, ImageIcon, Wrench, SlidersHorizontal, Layers, ChevronsUpDown } from 'lucide-react'
+import { Columns, Rows, X, LayoutDashboard, ChevronsUpDown, ImageIcon } from 'lucide-react'
 import { CanvasStage } from '../canvas/CanvasStage'
 import { Toolbar } from './Toolbar'
 import { PanelSidebar } from './PanelSidebar'
 import { LayerPanel } from '../layers/LayerPanel'
-import { SpritesheetPreviewWidget } from '../../plugins/spritesheet'
+import { widgetRegistry } from '../../core/WidgetRegistry'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,52 +23,17 @@ export type LayoutAction =
   | { type: 'SET_ACTIVE_TAB'; areaId: string; tabIndex: number }
   | { type: 'MOVE_TAB'; sourceAreaId: string; targetAreaId: string; tabId: string }
   | { type: 'CHANGE_TAB_WIDGET'; areaId: string; tabId: string; widgetId: string }
+  | { type: 'ENSURE_WIDGET'; widgetId: string }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 const genId = () => Math.random().toString(36).substr(2, 9)
 
-// ─── Widget Registry ──────────────────────────────────────────────────────────
+// ─── Widget Registry (dynamic) ───────────────────────────────────────────────
+// Widgets are registered via widgetRegistry.register() in registerWidgets.ts
+// and each plugin's own index.tsx. LayoutEngine has no hardcoded feature knowledge.
 
-const WIDGETS: Record<string, { name: string; icon: React.ElementType; Component: React.FC }> = {
-  canvas: {
-    name: 'Canvas',
-    icon: ImageIcon,
-    Component: () => (
-      <div className="h-full flex flex-col relative">
-        <CanvasStage />
-      </div>
-    ),
-  },
-  tools: {
-    name: 'Tools',
-    icon: Wrench,
-    Component: () => <Toolbar />,
-  },
-  properties: {
-    name: 'Properties',
-    icon: SlidersHorizontal,
-    Component: () => (
-      <div className="h-full flex flex-col">
-        <PanelSidebar />
-      </div>
-    ),
-  },
-  layers: {
-    name: 'Layers',
-    icon: Layers,
-    Component: () => (
-      <div className="h-full overflow-y-auto">
-        <LayerPanel />
-      </div>
-    ),
-  },
-  spritesheet_preview: {
-    name: 'Sprite Preview',
-    icon: LayoutDashboard,
-    Component: () => <SpritesheetPreviewWidget />,
-  },
-}
+const getWidgets = () => widgetRegistry.getAll()
 
 // ─── Tree Operations (Pure) ───────────────────────────────────────────────────
 
@@ -170,11 +135,11 @@ function SplitContainer({ node }: { node: SplitNode }) {
   const isRow = node.dir === 'row'
   return (
     <div id={`split-${node.id}`} className={`flex h-full w-full overflow-hidden ${isRow ? 'flex-row' : 'flex-col'}`}>
-      <div style={{ flexBasis: `${node.ratio}%`, flexGrow: 0, flexShrink: 0, overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
+      <div style={{ flexBasis: `${node.ratio}%`, flexGrow: 0, flexShrink: 1, overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
         <LayoutRenderer node={node.a} />
       </div>
       <Resizer splitId={node.id} dir={node.dir} />
-      <div style={{ flexBasis: `${100 - node.ratio}%`, flexGrow: 0, flexShrink: 0, overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
+      <div style={{ flexBasis: `${100 - node.ratio}%`, flexGrow: 0, flexShrink: 1, overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
         <LayoutRenderer node={node.b} />
       </div>
     </div>
@@ -187,7 +152,7 @@ function TabItem({ area, tab, idx }: { area: AreaNode; tab: Tab; idx: number }) 
   const { dispatch } = useLayout()
   const selectRef = useRef<HTMLSelectElement>(null)
   const isActive = idx === area.activeTab
-  const meta = WIDGETS[tab.widgetId]
+  const meta = widgetRegistry.get(tab.widgetId)
   const Icon = meta?.icon ?? ImageIcon
 
   return (
@@ -217,8 +182,8 @@ function TabItem({ area, tab, idx }: { area: AreaNode; tab: Tab; idx: number }) 
           }}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         >
-          {Object.entries(WIDGETS).map(([key, w]) => (
-            <option key={key} value={key}>{w.name}</option>
+          {getWidgets().map(w => (
+            <option key={w.id} value={w.id}>{w.name}</option>
           ))}
           <option disabled>──────────</option>
           <option value="__close__">Close</option>
@@ -273,8 +238,8 @@ function TabBar({ area }: { area: AreaNode }) {
           title="Add panel"
         >
           <option value="" disabled>+</option>
-          {Object.entries(WIDGETS).map(([key, w]) => (
-            <option key={key} value={key}>{w.name}</option>
+          {getWidgets().map(w => (
+            <option key={w.id} value={w.id}>{w.name}</option>
           ))}
         </select>
       </div>
@@ -285,6 +250,9 @@ function TabBar({ area }: { area: AreaNode }) {
         </button>
         <button onClick={() => dispatch({ type: 'SPLIT_AREA', areaId: area.id, dir: 'col' })} className="p-1 hover:bg-neutral-700 rounded text-neutral-500 hover:text-white transition-colors" title="Split Down">
           <Rows size={12} />
+        </button>
+        <button onClick={() => dispatch({ type: 'CLOSE_AREA', areaId: area.id })} className="p-1 hover:bg-red-500/20 hover:text-red-400 rounded text-neutral-500 transition-colors" title="Close Panel">
+          <X size={12} />
         </button>
       </div>
     </div>
@@ -302,16 +270,16 @@ function EmptyAreaState({ areaId }: { areaId: string }) {
         <span className="text-xs">Empty Panel</span>
       </div>
       <div className="grid grid-cols-1 gap-2 w-full max-w-[160px]">
-        {Object.entries(WIDGETS).map(([key, meta]) => {
-          const Icon = meta.icon
+        {getWidgets().map((w) => {
+          const Icon = w.icon
           return (
             <button
-              key={key}
-              onClick={() => dispatch({ type: 'ADD_TAB', areaId, widgetId: key })}
+              key={w.id}
+              onClick={() => dispatch({ type: 'ADD_TAB', areaId, widgetId: w.id })}
               className="flex items-center gap-2 p-2.5 bg-neutral-900 border border-neutral-800 hover:border-violet-500/50 hover:bg-neutral-800 rounded transition-all text-xs text-neutral-300"
             >
               <Icon size={14} className="text-violet-400 shrink-0" />
-              {meta.name}
+              {w.name}
             </button>
           )
         })}
@@ -324,7 +292,7 @@ function EmptyAreaState({ areaId }: { areaId: string }) {
 
 function AreaContainer({ node }: { node: AreaNode }) {
   const activeTab = node.tabs[node.activeTab]
-  const widget = activeTab && WIDGETS[activeTab.widgetId]
+  const widget = activeTab && widgetRegistry.get(activeTab.widgetId)
 
   return (
     <div className="flex flex-col h-full w-full bg-neutral-950 overflow-hidden">
@@ -361,7 +329,7 @@ function layoutReducer(state: LayoutNode, action: LayoutAction): LayoutNode {
 
     case 'ADD_TAB':
       return mutateArea(state, action.areaId, area => {
-        const meta = WIDGETS[action.widgetId]
+        const meta = widgetRegistry.get(action.widgetId)
         const tab: Tab = { id: genId(), title: meta?.name ?? action.widgetId, widgetId: action.widgetId }
         return { ...area, tabs: [...area.tabs, tab], activeTab: area.tabs.length }
       })
@@ -389,16 +357,68 @@ function layoutReducer(state: LayoutNode, action: LayoutAction): LayoutNode {
         ...area, tabs: [...area.tabs, extracted!], activeTab: area.tabs.length,
       }))
     }
-
     case 'CHANGE_TAB_WIDGET':
       return mutateArea(state, action.areaId, area => ({
         ...area,
         tabs: area.tabs.map(t =>
           t.id === action.tabId
-            ? { ...t, widgetId: action.widgetId, title: WIDGETS[action.widgetId]?.name ?? action.widgetId }
+            ? { ...t, widgetId: action.widgetId, title: widgetRegistry.get(action.widgetId)?.name ?? action.widgetId }
             : t
         ),
       }))
+
+    case 'ENSURE_WIDGET': {
+      const widgetId = action.widgetId
+      const existing = findWidgetTab(state, widgetId)
+      if (existing) {
+        return mutateArea(state, existing.areaId, area => ({ ...area, activeTab: existing.tabIndex }))
+      }
+
+
+      if (widgetId === 'timeline') {
+        const canvasTab = findWidgetTab(state, 'canvas')
+        const canvasAreaId = canvasTab ? canvasTab.areaId : 'canvas-panel'
+        
+        const splitCanvasWithTimeline = (node: LayoutNode): LayoutNode => {
+          if (node.type === 'area') {
+            if (node.id !== canvasAreaId) return node
+            const timelineAreaId = genId()
+            const timelineTab: Tab = { id: genId(), title: 'Timeline', widgetId: 'timeline' }
+            return {
+              id: genId(),
+              type: 'split',
+              dir: 'col',
+              ratio: 70,
+              a: node,
+              b: {
+                id: timelineAreaId,
+                type: 'area',
+                tabs: [timelineTab],
+                activeTab: 0
+              }
+            }
+          }
+          return {
+            ...node,
+            a: splitCanvasWithTimeline(node.a),
+            b: splitCanvasWithTimeline(node.b)
+          }
+        }
+        return splitCanvasWithTimeline(state)
+      }
+
+      // fallback: add to first area
+      const findFirstArea = (node: LayoutNode): string => {
+        if (node.type === 'area') return node.id
+        return findFirstArea(node.a)
+      }
+      const firstAreaId = findFirstArea(state)
+      return mutateArea(state, firstAreaId, area => {
+        const meta = widgetRegistry.get(widgetId)
+        const tab: Tab = { id: genId(), title: meta?.name ?? widgetId, widgetId }
+        return { ...area, tabs: [...area.tabs, tab], activeTab: area.tabs.length }
+      })
+    }
 
     default: return state
   }
@@ -438,13 +458,28 @@ const INITIAL_STATE: LayoutNode = {
 
 // ─── Layout Root (export) ─────────────────────────────────────────────────────
 
-export function LayoutRoot() {
+export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const [layout, dispatch] = useReducer(layoutReducer, INITIAL_STATE)
   return (
     <LayoutContext.Provider value={{ layout, dispatch }}>
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <LayoutRenderer node={layout} />
-      </div>
+      {children}
     </LayoutContext.Provider>
+  )
+}
+
+export function LayoutRendererRoot() {
+  const { layout } = useLayout()
+  return (
+    <div className="flex-1 min-h-0 overflow-hidden">
+      <LayoutRenderer node={layout} />
+    </div>
+  )
+}
+
+export function LayoutRoot() {
+  return (
+    <LayoutProvider>
+      <LayoutRendererRoot />
+    </LayoutProvider>
   )
 }

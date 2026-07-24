@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { Plus, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Upload, Layers, ChevronsDown } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Upload, Layers, ChevronsDown, Film } from 'lucide-react'
 import { useEditorStore } from '../../store/useEditorStore'
 import { DropZone } from '../layout/DropZone'
 import type { LayerInfo } from '../../core/types'
+import { probeMediaMetadata, extractFrameToCanvas } from '../../lib/media'
+import { importMediaFile } from '../../lib/mediaImport'
+import { useLayout } from '../layout/LayoutEngine'
 
 const BLEND_MODES: GlobalCompositeOperation[] = [
   'source-over', 'multiply', 'screen', 'overlay',
@@ -12,6 +15,7 @@ const BLEND_MODES: GlobalCompositeOperation[] = [
 
 export function LayerPanel() {
   const { engine, layerInfos, activeLayerId, syncFromEngine } = useEditorStore()
+  const { dispatch: layoutDispatch } = useLayout()
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameVal, setRenameVal]   = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -39,6 +43,12 @@ export function LayerPanel() {
     setRenamingId(null)
   }
 
+  const handleVideoImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    await importMediaFile(file, { layoutDispatch })
+  }
+
   const sl = 'w-full accent-violet-500'
 
   return (
@@ -52,8 +62,19 @@ export function LayerPanel() {
         </button>
         <button onClick={() => setImportOpen(true)} title="Import image as new layer"
           className="flex items-center gap-1 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300">
-          <Upload size={10} /> Import
+          <Upload size={10} /> Import Image
         </button>
+        <button onClick={() => { document.getElementById('layer-panel-video-input')?.click() }} title="Import video as new layer"
+          className="flex items-center gap-1 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300">
+          <Film size={10} /> Import Video
+        </button>
+        <input
+          type="file"
+          id="layer-panel-video-input"
+          accept="video/*"
+          className="hidden"
+          onChange={handleVideoImport}
+        />
         <button
           onClick={() => { e.mergeDown(); sync() }}
           disabled={layerInfos.findIndex((l: LayerInfo) => l.id === activeLayerId) <= 0}
@@ -75,14 +96,42 @@ export function LayerPanel() {
           const isActive = layer.id === activeLayerId
           return (
             <div key={layer.id}
-              onClick={() => { e.setActiveLayer(layer.id); sync() }}
-              className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer ${isActive ? 'bg-violet-900/40 border border-violet-700/40' : 'bg-neutral-800/40 border border-transparent hover:bg-neutral-800'}`}>
+              draggable
+              onDragStart={(ev) => {
+                ev.dataTransfer.setData('text/plain', layer.id)
+                ev.dataTransfer.effectAllowed = 'move'
+              }}
+              onDragOver={(ev) => {
+                ev.preventDefault()
+                ev.dataTransfer.dropEffect = 'move'
+              }}
+              onDrop={(ev) => {
+                ev.preventDefault()
+                const sourceId = ev.dataTransfer.getData('text/plain')
+                if (sourceId && sourceId !== layer.id) {
+                  e.reorderLayer(sourceId, layer.id)
+                  sync()
+                }
+              }}
+              onClick={() => {
+                e.setActiveLayer(layer.id)
+                if (layer.isVideo) {
+                  layoutDispatch({ type: 'ENSURE_WIDGET', widgetId: 'timeline' })
+                }
+                sync()
+              }}
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-grab active:cursor-grabbing ${isActive ? 'bg-violet-900/40 border border-violet-700/40' : 'bg-neutral-800/40 border border-transparent hover:bg-neutral-800'}`}>
 
               {/* Visibility */}
               <button onClick={ev => { ev.stopPropagation(); e.setLayerVisible(layer.id, !layer.visible); sync() }}
                 className="flex-none text-neutral-400 hover:text-white">
                 {layer.visible ? <Eye size={11} /> : <EyeOff size={11} className="text-neutral-600" />}
               </button>
+
+              {/* Type Indicator */}
+              <span className="text-neutral-500 flex-none">
+                {layer.isVideo ? <Film size={10} className="text-violet-400" /> : <Layers size={10} />}
+              </span>
 
               {/* Name */}
               {renamingId === layer.id ? (
@@ -143,6 +192,25 @@ export function LayerPanel() {
               {BLEND_MODES.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
+
+          <div className="pt-2">
+            <button
+              onClick={() => useEditorStore.getState().setActivePlugin('removebg')}
+              className="w-full py-1.5 px-2.5 rounded bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 text-xs font-semibold border border-violet-500/40 transition-colors flex items-center justify-between"
+            >
+              <span>Remove Background</span>
+              <span className="text-[10px] text-violet-400 font-mono">Smart AI / Key</span>
+            </button>
+          </div>
+
+          {activeLayer.isVideo && (
+            <div className="space-y-1 bg-neutral-900/30 p-2.5 rounded border border-neutral-800/80 mt-2 text-[9px] text-neutral-500 font-mono">
+              <p className="text-violet-400 font-bold uppercase tracking-wider mb-1">Video Details</p>
+              <div>File Duration: {activeLayer.videoDuration?.toFixed(1)}s</div>
+              <div>Trim Range: {activeLayer.trimStart?.toFixed(1)}s – {activeLayer.trimEnd?.toFixed(1)}s</div>
+              <div>Timeline Pos: {activeLayer.startTime?.toFixed(1)}s – {activeLayer.endTime?.toFixed(1)}s</div>
+            </div>
+          )}
         </div>
       )}
 

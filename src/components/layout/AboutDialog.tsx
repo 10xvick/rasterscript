@@ -59,8 +59,6 @@ export function AboutDialog({ open, onClose }: Props) {
               className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors">
               <ExternalLink size={12} /> GitHub
             </a>
-            <span className="text-neutral-700">·</span>
-            <span className="text-xs text-neutral-500">Built with React, Tailwind, Zustand, Vite</span>
           </div>
 
           {/* Roadmap */}

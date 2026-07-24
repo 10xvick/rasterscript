@@ -22,7 +22,7 @@ interface Persisted {
 }
 
 const DEFAULTS: Persisted = {
-  hiddenPlugins:  ['removebg'],
+  hiddenPlugins:  [],
   defaultWidth:   800,
   defaultHeight:  600,
   defaultFill:    'transparent',
@@ -39,8 +39,14 @@ const DEFAULTS: Persisted = {
 }
 
 function load(): Persisted {
-  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') } }
-  catch { return { ...DEFAULTS } }
+  try {
+    const loaded = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') }
+    // Ensure removebg is not hidden by legacy localStorage setting
+    loaded.hiddenPlugins = loaded.hiddenPlugins.filter(p => p !== 'removebg')
+    return loaded
+  } catch {
+    return { ...DEFAULTS }
+  }
 }
 
 function persist(state: SettingsState) {

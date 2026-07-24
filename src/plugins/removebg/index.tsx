@@ -1,20 +1,20 @@
-import { useState, useRef, useEffect } from 'react'
-import { Scissors } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Sparkles, Sliders, Brush, RotateCcw } from 'lucide-react'
 import type { EditorPlugin, PluginPanelProps, PluginOverlayProps } from '../../core/types'
 import { removeBgAuto, removeBgGuided } from './algorithms'
+import { useEditorStore } from '../../store/useEditorStore'
 
-// ─── Module-level shared state (panel writes, overlay reads) ──────────────────
+// ─── Module-level shared state ───────────────────────────────────────────────
 
 type BrushMode = 'fg' | 'bg'
-interface BgToolState { tab: 'auto' | 'guided'; brushMode: BrushMode; brushSize: number }
+interface BgToolState { tab: 'smartAi' | 'auto' | 'guided'; brushMode: BrushMode; brushSize: number }
 
 const toolState    = new Map<HTMLCanvasElement, BgToolState>()
 const scribbleCvs  = new Map<HTMLCanvasElement, HTMLCanvasElement>()
 
-const DEFAULT_STATE: BgToolState = { tab: 'auto', brushMode: 'fg', brushSize: 20 }
+const DEFAULT_STATE: BgToolState = { tab: 'smartAi', brushMode: 'fg', brushSize: 20 }
 
 // ─── Scribble Overlay ─────────────────────────────────────────────────────────
-// Always mounted when the plugin is active. Interactive only in 'guided' tab.
 
 function RemoveBgOverlay({ context, containerRef }: PluginOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -31,7 +31,6 @@ function RemoveBgOverlay({ context, containerRef }: PluginOverlayProps) {
     const resize = () => {
       const el = canvasRef.current, container = containerRef.current
       if (!el || !container) return
-      // Preserve existing scribbles when the container resizes
       const bak = document.createElement('canvas')
       bak.width  = el.width;  bak.height = el.height
       bak.getContext('2d')!.drawImage(el, 0, 0)
@@ -85,7 +84,7 @@ function RemoveBgOverlay({ context, containerRef }: PluginOverlayProps) {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full"
-      style={{ zIndex: 10, cursor: 'crosshair' }}
+      style={{ zIndex: 10, cursor: getState().tab === 'guided' ? 'crosshair' : 'default', pointerEvents: getState().tab === 'guided' ? 'auto' : 'none' }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -97,41 +96,124 @@ function RemoveBgOverlay({ context, containerRef }: PluginOverlayProps) {
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
 function RemoveBgPanel({ context }: PluginPanelProps) {
-  const [tab,       setTab]       = useState<'auto' | 'guided'>('auto')
+  const [tab, setTab] = useState<'smartAi' | 'auto' | 'guided'>('smartAi')
+  const [modelType, setModelType] = useState<'human' | 'object'>('human')
   const [tolerance, setTolerance] = useState(25)
-  const [feather,   setFeather]   = useState(2)
+  const [feather, setFeather] = useState(2)
   const [brushMode, setBrushMode] = useState<BrushMode>('fg')
   const [brushSize, setBrushSize] = useState(20)
-  const [status,    setStatus]    = useState('')
+  const [status, setStatus] = useState('')
 
-  // Keep module-level state in sync so the overlay reads correct values
+  const [invertMask, setInvertMask] = useState(false)
+  const [edgeShift, setEdgeShift] = useState(-10)
+  const [feathering, setFeathering] = useState(20)
+  const [isProcessing, setIsProcessing] = useState(false)
+
   useEffect(() => {
     toolState.set(context.canvas, { tab, brushMode, brushSize })
   }, [tab, brushMode, brushSize, context.canvas])
+
+  const activeLayerId = useEditorStore(s => s.activeLayerId)
+  const prevLayerIdRef = useRef<string>(activeLayerId)
+  const originalImageDataRef = useRef<ImageData | null>(null)
+
+  // Reset layer image backup whenever active layer changes
+  useEffect(() => {
+    if (prevLayerIdRef.current !== activeLayerId) {
+      prevLayerIdRef.current = activeLayerId
+      originalImageDataRef.current = null
+    }
+  }, [activeLayerId])
+
+  // Save original un-edited image data for current active layer
+  useEffect(() => {
+    if (!originalImageDataRef.current && context) {
+      originalImageDataRef.current = context.getImageData()
+    }
+  }, [context, activeLayerId])
 
   const clearScribbles = () => {
     const ov = scribbleCvs.get(context.canvas); if (!ov) return
     ov.getContext('2d')!.clearRect(0, 0, ov.width, ov.height)
   }
 
+  const applySmartAi = useCallback(async () => {
+    if (!context || isProcessing) return
+    setIsProcessing(true)
+    setStatus('Processing…')
+
+    try {
+      const srcImageData = originalImageDataRef.current || context.getImageData()
+      if (!originalImageDataRef.current) {
+        originalImageDataRef.current = srcImageData
+      }
+
+      const w = Math.max(1, Math.floor(srcImageData.width || context.width))
+      const h = Math.max(1, Math.floor(srcImageData.height || context.height))
+      if (w <= 0 || h <= 0) return
+
+      const srcCanvas = document.createElement('canvas')
+      srcCanvas.width = w
+      srcCanvas.height = h
+      const srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true })!
+      srcCtx.putImageData(srcImageData, 0, 0)
+
+      const outCanvas = document.createElement('canvas')
+      outCanvas.width = w
+      outCanvas.height = h
+
+      const { applySelfieSegmentation } = await import('../../lib/selfieSegmentation')
+      await applySelfieSegmentation(srcCanvas, outCanvas, edgeShift, feathering, invertMask)
+
+      const outCtx = outCanvas.getContext('2d', { willReadFrequently: true })!
+      const finalImgData = outCtx.getImageData(0, 0, w, h)
+
+      if (context.setActiveLayerImageData) {
+        context.setActiveLayerImageData(finalImgData, true, 'Remove BG')
+      } else {
+        context.setImageData(finalImgData, true)
+      }
+      setStatus('Done ✓')
+    } catch (err) {
+      console.error('Smart AI error:', err)
+      setStatus('Error processing image')
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [context, edgeShift, feathering, invertMask, isProcessing])
+
+  const resetBg = () => {
+    if (originalImageDataRef.current && context) {
+      if (context.setActiveLayerImageData) {
+        context.setActiveLayerImageData(originalImageDataRef.current, true, 'Restore BG')
+      } else {
+        context.setImageData(originalImageDataRef.current, true)
+      }
+      setStatus('Original Restored ✓')
+    }
+  }
+
   const applyAuto = () => {
     setStatus('Processing…')
-    const src = context.getImageData()
-    // defer so React can paint "Processing…" before the heavy sync work
+    const src = originalImageDataRef.current || context.getImageData()
     setTimeout(() => {
       try {
         const result = removeBgAuto(src, tolerance / 100, feather)
-        context.setImageData(result, true)
+        if (context.setActiveLayerImageData) {
+          context.setActiveLayerImageData(result, true, 'Auto Remove BG')
+        } else {
+          context.setImageData(result, true)
+        }
         setStatus('Done ✓')
       } catch (e) {
-        setStatus('Error: ' + String(e))
+        setStatus('Error processing image')
       }
     }, 16)
   }
 
   const applyGuided = () => {
     const ov = scribbleCvs.get(context.canvas)
-    if (!ov) { setStatus('Draw scribbles on the canvas first'); return }
+    if (!ov) { setStatus('Draw on the canvas first'); return }
 
     const ovCtx = ov.getContext('2d', { willReadFrequently: true })!
     const ovData = ovCtx.getImageData(0, 0, ov.width, ov.height)
@@ -145,105 +227,184 @@ function RemoveBgPanel({ context }: PluginPanelProps) {
     }
 
     if (!hasGreen || !hasRed) {
-      setStatus(!hasGreen ? 'Add green strokes on the subject' : 'Add red strokes on the background')
+      setStatus(!hasGreen ? 'Paint green over the subject' : 'Paint red over the background')
       return
     }
 
     setStatus('Processing…')
-    const src = context.getImageData()
+    const src = originalImageDataRef.current || context.getImageData()
     setTimeout(() => {
       try {
         const result = removeBgGuided(src, ovData, ov.width, ov.height, feather)
-        context.setImageData(result, true)
+        if (context.setActiveLayerImageData) {
+          context.setActiveLayerImageData(result, true, 'Guided Remove BG')
+        } else {
+          context.setImageData(result, true)
+        }
         clearScribbles()
         setStatus('Done ✓')
       } catch (e) {
-        setStatus('Error: ' + String(e))
+        setStatus('Error processing image')
       }
     }, 16)
   }
 
-  const sl     = 'w-full accent-violet-500'
+  const sl = 'w-full accent-violet-500'
   const tabCls = (t: string) =>
-    `flex-1 py-1.5 text-xs transition-colors ${
+    `flex-1 py-1.5 text-[11px] font-medium flex items-center justify-center gap-1 transition-colors ${
       tab === t
-        ? 'text-violet-400 border-b-2 border-violet-500 bg-neutral-800/40'
+        ? 'text-violet-400 border-b-2 border-violet-500 bg-neutral-800/40 font-semibold'
         : 'text-neutral-500 hover:text-neutral-300'
     }`
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="flex flex-col h-full overflow-y-auto bg-neutral-900 text-neutral-200">
       {/* Tabs */}
       <div className="flex border-b border-neutral-800 shrink-0">
-        <button className={tabCls('auto')}    onClick={() => setTab('auto')}>Auto</button>
-        <button className={tabCls('guided')}  onClick={() => setTab('guided')}>Guided</button>
+        <button className={tabCls('smartAi')} onClick={() => setTab('smartAi')}>
+          <Sparkles size={13} />
+          Auto AI
+        </button>
+        <button className={tabCls('auto')} onClick={() => setTab('auto')}>
+          <Sliders size={13} />
+          Color Key
+        </button>
+        <button className={tabCls('guided')} onClick={() => setTab('guided')}>
+          <Brush size={13} />
+          Guided
+        </button>
       </div>
 
-      <div className="p-3 space-y-3 text-xs">
+      <div className="p-3 space-y-3 text-xs flex-1">
+        {/* ── Smart AI tab ──────────────────────────────────────────────── */}
+        {tab === 'smartAi' && (
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] text-neutral-400 uppercase font-medium block mb-1">
+                Target Subject
+              </label>
+              <select
+                value={modelType}
+                onChange={e => setModelType(e.target.value as 'human' | 'object')}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded px-2 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-violet-500"
+              >
+                <option value="human">Person / Portrait</option>
+                <option value="object">General Objects</option>
+              </select>
+            </div>
+
+            {/* Edge Shift Slider */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <label className="text-neutral-400 font-medium">Edge Shift</label>
+                <span className="text-violet-400 font-mono">{edgeShift}%</span>
+              </div>
+              <input
+                type="range"
+                min="-50"
+                max="50"
+                value={edgeShift}
+                onChange={e => setEdgeShift(parseInt(e.target.value))}
+                className="w-full accent-violet-500"
+              />
+            </div>
+
+            {/* Feathering Slider */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <label className="text-neutral-400 font-medium">Feathering</label>
+                <span className="text-violet-400 font-mono">{feathering}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={feathering}
+                onChange={e => setFeathering(parseInt(e.target.value))}
+                className="w-full accent-violet-500"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
+              <input
+                type="checkbox"
+                checked={invertMask}
+                onChange={e => setInvertMask(e.target.checked)}
+                className="accent-violet-500 rounded"
+              />
+              <span>Invert Cutout</span>
+            </label>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={applySmartAi}
+                disabled={isProcessing}
+                className="w-full py-2 rounded bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs font-semibold text-white transition-colors flex items-center justify-center gap-1.5 shadow"
+              >
+                <Sparkles size={14} />
+                {isProcessing ? 'Processing...' : 'Remove Background'}
+              </button>
+
+              <button
+                onClick={resetBg}
+                className="w-full py-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 transition-colors flex items-center justify-center gap-1.5 border border-neutral-700"
+              >
+                <RotateCcw size={13} />
+                Restore Original
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Auto tab ────────────────────────────────────────────────────── */}
         {tab === 'auto' && (
-          <>
-            <p className="text-[10px] text-neutral-500 leading-relaxed">
-              Samples border pixels, fits a K-means colour model, then flood-fills connected background regions with soft alpha edges.
-            </p>
-
+          <div className="space-y-3">
             <div>
               <div className="flex justify-between text-neutral-400 mb-1">
-                <span>Tolerance</span><span>{tolerance}%</span>
+                <span>Color Tolerance</span><span>{tolerance}%</span>
               </div>
               <input type="range" min={1} max={80} value={tolerance}
                 onChange={e => setTolerance(+e.target.value)} className={sl} />
-              <p className="text-[10px] text-neutral-600 mt-0.5">
-                Higher = removes more colour variation
-              </p>
             </div>
 
             <div>
               <div className="flex justify-between text-neutral-400 mb-1">
-                <span>Edge Feather</span><span>{feather}px</span>
+                <span>Feather</span><span>{feather}px</span>
               </div>
               <input type="range" min={0} max={20} value={feather}
                 onChange={e => setFeather(+e.target.value)} className={sl} />
             </div>
 
             <button onClick={applyAuto}
-              className="w-full py-2 rounded bg-violet-600 hover:bg-violet-500 text-xs font-medium transition-colors">
+              className="w-full py-2 rounded bg-violet-600 hover:bg-violet-500 text-xs font-medium transition-colors shadow">
               Remove Background
             </button>
-          </>
+          </div>
         )}
 
         {/* ── Guided tab ──────────────────────────────────────────────────── */}
         {tab === 'guided' && (
-          <>
-            <p className="text-[10px] text-neutral-500 leading-relaxed">
-              Paint <span className="text-green-400 font-medium">green</span> over
-              the subject and <span className="text-red-400 font-medium">red</span> over
-              the background. The algorithm builds separate colour models from your strokes.
-            </p>
-
-            {/* Brush mode toggle */}
+          <div className="space-y-3">
             <div className="flex rounded overflow-hidden border border-neutral-700">
               <button
                 onClick={() => setBrushMode('fg')}
                 className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[10px] font-medium transition-colors ${
                   brushMode === 'fg'
-                    ? 'bg-green-800/70 text-green-300'
+                    ? 'bg-green-800/70 text-green-300 font-semibold'
                     : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                 }`}>
                 <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
-                Subject (keep)
+                Keep Area
               </button>
               <button
                 onClick={() => setBrushMode('bg')}
                 className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[10px] font-medium transition-colors ${
                   brushMode === 'bg'
-                    ? 'bg-red-900/70 text-red-300'
+                    ? 'bg-red-900/70 text-red-300 font-semibold'
                     : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                 }`}>
                 <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                Background (remove)
+                Remove Area
               </button>
             </div>
 
@@ -257,7 +418,7 @@ function RemoveBgPanel({ context }: PluginPanelProps) {
 
             <div>
               <div className="flex justify-between text-neutral-400 mb-1">
-                <span>Edge Feather</span><span>{feather}px</span>
+                <span>Feather</span><span>{feather}px</span>
               </div>
               <input type="range" min={0} max={20} value={feather}
                 onChange={e => setFeather(+e.target.value)} className={sl} />
@@ -265,26 +426,22 @@ function RemoveBgPanel({ context }: PluginPanelProps) {
 
             <div className="flex gap-2">
               <button onClick={applyGuided}
-                className="flex-1 py-2 rounded bg-violet-600 hover:bg-violet-500 text-xs font-medium transition-colors">
-                Apply
+                className="flex-1 py-2 rounded bg-violet-600 hover:bg-violet-500 text-xs font-medium transition-colors shadow">
+                Apply Selection
               </button>
               <button onClick={clearScribbles}
-                className="px-3 py-2 rounded bg-neutral-700 hover:bg-neutral-600 text-xs transition-colors">
+                className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700 text-xs transition-colors border border-neutral-700">
                 Clear
               </button>
             </div>
-
-            <p className="text-[10px] text-neutral-600 leading-tight">
-              A few broad strokes are enough — you don't need to cover every pixel. Cover varied areas for best results.
-            </p>
-          </>
+          </div>
         )}
 
         {/* Status */}
         {status && (
           <p className={`text-[10px] ${
             status.startsWith('Error') ? 'text-red-400'
-            : status === 'Done ✓'     ? 'text-green-400'
+            : status.includes('✓')     ? 'text-green-400 font-medium'
             : 'text-neutral-400 animate-pulse'
           }`}>
             {status}
@@ -295,16 +452,16 @@ function RemoveBgPanel({ context }: PluginPanelProps) {
   )
 }
 
-// ─── Plugin ───────────────────────────────────────────────────────────────────
+// ─── Plugin Definition ────────────────────────────────────────────────────────
 
 export const removeBgPlugin: EditorPlugin = {
   id: 'removebg',
   name: 'Remove BG',
-  icon: <Scissors size={18} />,
-  category: 'experimental',
+  icon: <Sparkles size={18} />,
+  category: 'cutout',
   Panel: RemoveBgPanel,
   CanvasOverlay: RemoveBgOverlay,
   deactivate: (_ctx) => {
-    // Leave scribbles intact so the user can return and continue; they can Clear explicitly.
+    // Leave scribbles intact so user can return
   },
 }

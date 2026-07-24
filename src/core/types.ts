@@ -17,11 +17,17 @@ export interface EditorContext {
   /** Returns the 2D context of the currently active layer canvas */
   getActiveLayerCtx: () => CanvasRenderingContext2D | null
   /** Re-composites all layers to the display canvas */
-  compositeToCanvas: () => void
+  compositeToCanvas: (currentTime?: number) => void
   /** Crop all layers to the given rect without flattening */
   cropDocument: (x: number, y: number, w: number, h: number) => void
   /** Paste ImageData as a new layer at exact canvas coordinates */
   pasteAsLayer: (data: ImageData, x: number, y: number, name?: string) => void
+  /** Set properties of a video/temporal layer */
+  setLayerVideoProperties?: (id: string, props: Partial<LayerInfo>) => void
+  /** Updates ONLY the active layer's ImageData without destroying or flattening other layers */
+  setActiveLayerImageData?: (data: ImageData, pushHistory?: boolean, label?: string) => void
+  /** Returns the active layer's ImageData directly */
+  getActiveLayerImageData?: () => ImageData | null
 }
 
 // ─── Plugin Panel & Overlay props ────────────────────────────────────────────
@@ -67,6 +73,42 @@ export interface LayerInfo {
   visible: boolean
   opacity: number
   blendMode: GlobalCompositeOperation
+
+  // Video-specific properties (optional)
+  isVideo?: boolean
+  videoFile?: File
+  videoDuration?: number
+  startTime?: number        // seconds on the global timeline where clip starts
+  endTime?: number          // seconds on the global timeline where clip ends
+  trimStart?: number        // seconds offset in source video
+  trimEnd?: number          // seconds offset in source video
+
+  // Real-time Chroma Key properties (optional)
+  removeBg?: boolean
+  bgKeyColor?: string       // Hex string, e.g., "#00ff00"
+  bgThreshold?: number      // 0-441 threshold
+
+  // Real-time Visual Adjustments & Transform (optional)
+  brightness?: number       // 100% neutral (50-200%)
+  contrast?: number         // 100% neutral (50-200%)
+  saturation?: number       // 100% neutral (0-300%)
+  hueRotate?: number        // 0-360 degrees
+  blur?: number             // 0-20 px
+  scale?: number            // 1.0 neutral
+  posX?: number             // X pixel offset
+  posY?: number             // Y pixel offset
+  // Real-time Crop properties for video layers (optional)
+  cropX?: number
+  cropY?: number
+  cropW?: number
+  cropH?: number
+
+  // AI-powered Background Removal (optional)
+  useAiBgRemoval?: boolean
+  aiModelType?: 'human' | 'object'
+  invertAiMask?: boolean
+  edgeShift?: number
+  feathering?: number
 }
 
 export interface LayerSnapshot {

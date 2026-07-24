@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ImagePlus, Clipboard, X } from 'lucide-react'
 import { useEditorStore } from '../../store/useEditorStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
+import { importMediaFile } from '../../lib/mediaImport'
 
 interface DropZoneProps {
   open?: boolean
@@ -14,9 +15,10 @@ export function DropZone({ open, onClose, importOnly }: DropZoneProps) {
   const [over, setOver] = useState(false)
   const [mode, setMode] = useState<'import' | 'new'>('import')
 
-  if (!open) return null
+  const isModal = open !== undefined
+  if (isModal && !open) return null
+  if (!isModal && hasImage) return null
 
-  const isModal = !!(open && onClose)
   const activeMode = importOnly ? 'import' : (hasImage ? mode : 'new')
 
   const importAsLayer = async (file: File) => {
@@ -32,18 +34,19 @@ export function DropZone({ open, onClose, importOnly }: DropZoneProps) {
 
   const loadFiles = async (files: FileList | File[]) => {
     if (!engine) return
-    const images = Array.from(files).filter(f => f.type.startsWith('image/'))
-    if (!images.length) return
-    const bmp = await createImageBitmap(images[0])
-    engine.loadImage(bmp)
-    setHasImage(true)
-    syncFromEngine()
-    for (const file of images.slice(1)) await importAsLayer(file)
+    const mediaFiles = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/') || /\.(mp4|webm|mov|mkv|avi|ogv)$/i.test(f.name))
+    if (!mediaFiles.length) return
+    await importMediaFile(mediaFiles[0], { isPrimary: true })
+    for (const file of mediaFiles.slice(1)) {
+      await importMediaFile(file, { isPrimary: false })
+    }
   }
 
   const loadAsLayers = async (files: FileList | File[]) => {
-    const images = Array.from(files).filter(f => f.type.startsWith('image/'))
-    for (const file of images) await importAsLayer(file)
+    const mediaFiles = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/') || /\.(mp4|webm|mov|mkv|avi|ogv)$/i.test(f.name))
+    for (const file of mediaFiles) {
+      await importMediaFile(file, { isPrimary: false })
+    }
   }
 
   const loadImageFromBlob = async (blob: Blob) => {
@@ -95,7 +98,7 @@ export function DropZone({ open, onClose, importOnly }: DropZoneProps) {
 
   const handleBrowse = () => {
     const input = document.createElement('input')
-    input.type = 'file'; input.accept = 'image/*'; input.multiple = true
+    input.type = 'file'; input.accept = 'image/*,video/*'; input.multiple = true
     input.onchange = () => {
       if (!input.files?.length) return
       if (activeMode === 'import') loadAsLayers(input.files)
@@ -147,13 +150,13 @@ export function DropZone({ open, onClose, importOnly }: DropZoneProps) {
         <ImagePlus size={48} className="mx-auto mb-4 text-neutral-500" />
         
         <p className="text-neutral-300 text-lg font-medium">
-          {activeMode === 'import' ? 'Drop images to import as layers' : 'Drop images to open new canvas'}
+          {activeMode === 'import' ? 'Drop images or videos to import as layers' : 'Drop images or videos to open'}
         </p>
         
         <p className="text-neutral-500 text-sm mt-1">
           {activeMode === 'import'
-            ? 'Each file will be added as a new layer to the current document'
-            : 'Multiple files — first becomes background, others become layers'}
+            ? 'Each file will be added as a new image or video layer'
+            : 'Multiple files — first becomes background, others become video/image layers'}
         </p>
 
         <p className="text-neutral-500 text-sm mt-3.5">or</p>

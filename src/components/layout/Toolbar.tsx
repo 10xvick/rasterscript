@@ -1,11 +1,13 @@
 import { Fragment, useState } from 'react'
-import { Undo2, Redo2, ZoomIn, ZoomOut, Download, FolderOpen, FilePlus, Settings, Info } from 'lucide-react'
+import { Undo2, Redo2, ZoomIn, ZoomOut, Download, FolderOpen, FilePlus, Settings, Info, Scissors, Copy, Trash2, ArrowLeft, Play, Pause, Layers, LayoutDashboard, Sliders, Film } from 'lucide-react'
 import { useEditorStore } from '../../store/useEditorStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { ExportDialog } from './ExportDialog'
 import { AboutDialog } from './AboutDialog'
 import { DropZone } from './DropZone'
 import type { EditorPlugin } from '../../core/types'
+import { useLayout, findWidgetTab } from './LayoutEngine'
+import { extractFrameAsImageData } from '../../plugins/video/operations'
 
 const CATEGORY_ORDER: EditorPlugin['category'][] = ['transform', 'draw', 'filter', 'cutout', 'script', 'export', 'experimental']
 
@@ -18,6 +20,11 @@ export function Toolbar() {
   const [exportOpen, setExportOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+
+  const { layerInfos, activeLayerId, currentTime, duration, playing, setTimeline } = useEditorStore()
+  const { layout, dispatch: layoutDispatch } = useLayout()
+
+  const activeLayer = layerInfos.find(l => l.id === activeLayerId) ?? null
 
   const undo = () => { engine?.undo(); syncFromEngine() }
   const redo = () => { engine?.redo(); syncFromEngine() }
@@ -64,10 +71,12 @@ export function Toolbar() {
     <p className="px-2 pt-1 pb-0.5 text-[9px] uppercase tracking-wider text-neutral-600 font-medium">{label}</p>
   )
 
+
+
   return (
     <div className="flex flex-col w-full h-full bg-neutral-900 p-1.5 overflow-y-auto gap-0.5">
       {group('File')}
-      {btn('Open Image',  <FolderOpen size={15} />, () => setImportOpen(true), false, false, 'O')}
+      {btn('Open File (Image/Video)',  <FolderOpen size={15} />, () => setImportOpen(true), false, false, 'O')}
       {btn('New Canvas',  <FilePlus   size={15} />, newFile)}
       {btn('Export', <Download size={15} />, () => setExportOpen(true), false, false, 'E')}
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
@@ -87,7 +96,13 @@ export function Toolbar() {
               {btn(
                 plugin.name,
                 plugin.icon,
-                () => setActivePlugin(activePluginId === plugin.id ? null : plugin.id),
+                () => {
+                  const nextId = activePluginId === plugin.id ? null : plugin.id
+                  setActivePlugin(nextId)
+                  if (nextId === 'video') {
+                    layoutDispatch({ type: 'ENSURE_WIDGET', widgetId: 'timeline' })
+                  }
+                },
                 false,
                 activePluginId === plugin.id,
                 plugin.shortcutKey?.toUpperCase(),

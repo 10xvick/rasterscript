@@ -3,6 +3,7 @@ import { useRef, useState, useCallback } from 'react'
 import { Crop } from 'lucide-react'
 import type { EditorPlugin, PluginOverlayProps, PluginPanelProps } from '../../core/types'
 import { useEditorStore } from '../../store/useEditorStore'
+import { useCropStore } from './useCropStore'
 
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
@@ -11,8 +12,8 @@ interface CropPanelProps extends PluginPanelProps {
 }
 
 function CropPanel({ context, onApply }: CropPanelProps) {
-  const cropRect = useEditorStore(s => s.cropRect)
-  const setCropRect = useEditorStore(s => s.setCropRect)
+  const cropRect    = useCropStore(s => s.cropRect)
+  const setCropRect = useCropStore(s => s.setCropRect)
 
   const x = cropRect ? cropRect.x : 0
   const y = cropRect ? cropRect.y : 0
@@ -20,21 +21,17 @@ function CropPanel({ context, onApply }: CropPanelProps) {
   const h = cropRect ? cropRect.h : context.getHeight()
 
   const updateVal = (key: 'x' | 'y' | 'w' | 'h', val: number) => {
-    const cw = context.getWidth()
-    const ch = context.getHeight()
-    
+    const cw      = context.getWidth()
+    const ch      = context.getHeight()
     const current = cropRect || { x: 0, y: 0, w: cw, h: ch }
-    let clampedVal = val
+    let clamped   = val
 
-    if (key === 'x') clampedVal = Math.max(0, Math.min(val, cw - 1))
-    if (key === 'y') clampedVal = Math.max(0, Math.min(val, ch - 1))
-    if (key === 'w') clampedVal = Math.max(1, Math.min(val, cw - current.x))
-    if (key === 'h') clampedVal = Math.max(1, Math.min(val, ch - current.y))
+    if (key === 'x') clamped = Math.max(0, Math.min(val, cw - 1))
+    if (key === 'y') clamped = Math.max(0, Math.min(val, ch - 1))
+    if (key === 'w') clamped = Math.max(1, Math.min(val, cw - current.x))
+    if (key === 'h') clamped = Math.max(1, Math.min(val, ch - current.y))
 
-    setCropRect({
-      ...current,
-      [key]: clampedVal
-    })
+    setCropRect({ ...current, [key]: clamped })
   }
 
   const apply = () => {
@@ -43,7 +40,6 @@ function CropPanel({ context, onApply }: CropPanelProps) {
     const cy = Math.max(0, Math.min(y, ch - 1))
     const cW = Math.max(1, Math.min(w, cw - cx))
     const cH = Math.max(1, Math.min(h, ch - cy))
-    
     context.cropDocument(cx, cy, cW, cH)
     onApply?.()
   }
@@ -54,54 +50,26 @@ function CropPanel({ context, onApply }: CropPanelProps) {
   return (
     <div className="p-3 space-y-3">
       <p className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium">Crop Settings</p>
-      
+
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className={labelCls}>Offset X</label>
-          <input
-            type="number"
-            min={0}
-            max={context.getWidth() - 1}
-            value={x}
-            onChange={e => updateVal('x', Number(e.target.value))}
-            className={inputCls}
-          />
+          <input type="number" min={0} max={context.getWidth() - 1} value={x} onChange={e => updateVal('x', Number(e.target.value))} className={inputCls} />
         </div>
         <div>
           <label className={labelCls}>Offset Y</label>
-          <input
-            type="number"
-            min={0}
-            max={context.getHeight() - 1}
-            value={y}
-            onChange={e => updateVal('y', Number(e.target.value))}
-            className={inputCls}
-          />
+          <input type="number" min={0} max={context.getHeight() - 1} value={y} onChange={e => updateVal('y', Number(e.target.value))} className={inputCls} />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className={labelCls}>Width</label>
-          <input
-            type="number"
-            min={1}
-            max={context.getWidth() - x}
-            value={w}
-            onChange={e => updateVal('w', Number(e.target.value))}
-            className={inputCls}
-          />
+          <input type="number" min={1} max={context.getWidth() - x} value={w} onChange={e => updateVal('w', Number(e.target.value))} className={inputCls} />
         </div>
         <div>
           <label className={labelCls}>Height</label>
-          <input
-            type="number"
-            min={1}
-            max={context.getHeight() - y}
-            value={h}
-            onChange={e => updateVal('h', Number(e.target.value))}
-            className={inputCls}
-          />
+          <input type="number" min={1} max={context.getHeight() - y} value={h} onChange={e => updateVal('h', Number(e.target.value))} className={inputCls} />
         </div>
       </div>
 
@@ -118,21 +86,21 @@ function CropPanel({ context, onApply }: CropPanelProps) {
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
 function CropOverlay({ context, containerRef }: PluginOverlayProps) {
-  const zoom = useEditorStore(s => s.zoom)
-  const cropRect = useEditorStore(s => s.cropRect)
-  const setCropRect = useEditorStore(s => s.setCropRect)
-  
-  const divRef = useRef<HTMLDivElement>(null)
+  const zoom        = useEditorStore(s => s.zoom)
+  const cropRect    = useCropStore(s => s.cropRect)
+  const setCropRect = useCropStore(s => s.setCropRect)
+
+  const divRef    = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState(false)
-  const start = useRef({ x: 0, y: 0 })
+  const start     = useRef({ x: 0, y: 0 })
 
   const getCanvasPoint = useCallback((e: React.PointerEvent) => {
     if (!containerRef.current) return { x: 0, y: 0 }
-    const r = containerRef.current.getBoundingClientRect()
+    const r    = containerRef.current.getBoundingClientRect()
     const rawX = (e.clientX - r.left) * context.getWidth()  / r.width
     const rawY = (e.clientY - r.top)  * context.getHeight() / r.height
     return {
-      x: Math.max(0, Math.min(context.getWidth(), rawX)),
+      x: Math.max(0, Math.min(context.getWidth(),  rawX)),
       y: Math.max(0, Math.min(context.getHeight(), rawY)),
     }
   }, [context, containerRef])
@@ -140,35 +108,27 @@ function CropOverlay({ context, containerRef }: PluginOverlayProps) {
   const onPointerDown = (e: React.PointerEvent) => {
     const p = getCanvasPoint(e)
     start.current = p
-    const newRect = { x: Math.round(p.x), y: Math.round(p.y), w: 0, h: 0 }
-    setCropRect(newRect)
-    setDragging(true);
-    if (divRef.current) {
-      divRef.current.setPointerCapture(e.pointerId)
-    }
+    setCropRect({ x: Math.round(p.x), y: Math.round(p.y), w: 0, h: 0 })
+    setDragging(true)
+    divRef.current?.setPointerCapture(e.pointerId)
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragging) return
     const p = getCanvasPoint(e)
-    const newRect = {
+    setCropRect({
       x: Math.round(Math.min(p.x, start.current.x)),
       y: Math.round(Math.min(p.y, start.current.y)),
       w: Math.round(Math.abs(p.x - start.current.x)),
       h: Math.round(Math.abs(p.y - start.current.y)),
-    }
-    setCropRect(newRect)
+    })
   }
 
-  const onPointerUp = () => {
-    setDragging(false)
-  }
+  const onPointerUp = () => setDragging(false)
 
   const screenRect = cropRect && cropRect.w > 2 && cropRect.h > 2 ? {
-    x: cropRect.x * zoom,
-    y: cropRect.y * zoom,
-    w: cropRect.w * zoom,
-    h: cropRect.h * zoom,
+    x: cropRect.x * zoom, y: cropRect.y * zoom,
+    w: cropRect.w * zoom, h: cropRect.h * zoom,
   } : null
 
   return (
@@ -176,13 +136,7 @@ function CropOverlay({ context, containerRef }: PluginOverlayProps) {
       <div
         ref={divRef}
         className="absolute cursor-crosshair"
-        style={{
-          left: -2000,
-          top: -2000,
-          right: -2000,
-          bottom: -2000,
-          zIndex: 10,
-        }}
+        style={{ left: -2000, top: -2000, right: -2000, bottom: -2000, zIndex: 10 }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -190,23 +144,10 @@ function CropOverlay({ context, containerRef }: PluginOverlayProps) {
       <div className="absolute inset-0 w-full h-full pointer-events-none">
         {screenRect && (
           <>
-            <div
-              className="absolute"
-              style={{
-                inset: 0,
-                backgroundColor: 'rgba(0,0,0,0.45)',
-                pointerEvents: 'none',
-              }}
-            />
+            <div className="absolute" style={{ inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', pointerEvents: 'none' }} />
             <div
               className="absolute border-2 border-dashed border-white"
-              style={{
-                left: screenRect.x,
-                top: screenRect.y,
-                width: screenRect.w,
-                height: screenRect.h,
-                pointerEvents: 'none',
-              }}
+              style={{ left: screenRect.x, top: screenRect.y, width: screenRect.w, height: screenRect.h, pointerEvents: 'none' }}
             />
           </>
         )}
@@ -215,37 +156,33 @@ function CropOverlay({ context, containerRef }: PluginOverlayProps) {
   )
 }
 
-// ─── Wrapper to deactivate tool on apply ──────────────────────────────────────
+// ─── Wrapper (deactivate on apply) ───────────────────────────────────────────
 
 function CropPanelWrapper(props: PluginPanelProps) {
-  const setCropRect = useEditorStore(s => s.setCropRect)
-  
+  const setCropRect    = useCropStore(s => s.setCropRect)
+  const setActivePlugin = useEditorStore(s => s.setActivePlugin)
+
   return (
-    <CropPanel 
-      {...props} 
+    <CropPanel
+      {...props}
       onApply={() => {
         setCropRect(null)
-        // Deactivate crop tool
-        const store = (window as unknown as Record<string, unknown>).__editorStore
-        if (store && typeof store === 'object' && 'setActivePlugin' in store) {
-          (store as { setActivePlugin: (id: string | null) => void }).setActivePlugin(null)
-        }
+        // Cleanly deactivate via the store — no window hacks
+        setActivePlugin(null)
       }}
     />
   )
 }
 
+// ─── Plugin definition ────────────────────────────────────────────────────────
+
 export const cropPlugin: EditorPlugin = {
-  id: 'crop',
-  name: 'Crop',
-  icon: <Crop size={18} />,
+  id:       'crop',
+  name:     'Crop',
+  icon:     <Crop size={18} />,
   category: 'transform',
-  Panel: CropPanelWrapper,
+  Panel:    CropPanelWrapper,
   CanvasOverlay: CropOverlay,
-  activate: () => {
-    useEditorStore.getState().setCropRect(null)
-  },
-  deactivate: () => {
-    useEditorStore.getState().setCropRect(null)
-  }
+  activate:   () => useCropStore.getState().resetCrop(),
+  deactivate: () => useCropStore.getState().resetCrop(),
 }

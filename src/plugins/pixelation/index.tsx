@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { Grid } from 'lucide-react'
 import type { EditorPlugin, PluginOverlayProps, PluginPanelProps } from '../../core/types'
 import { useEditorStore } from '../../store/useEditorStore'
+import { usePixelationStore } from './usePixelationStore'
 
 // ─── Constants & Color Math ──────────────────────────────────────────────────
 
@@ -137,10 +138,8 @@ function applyPixelationEffect(
 // ─── Panel Component ─────────────────────────────────────────────────────────
 
 function PixelationPanel({ context }: PluginPanelProps) {
-  const pixelation = useEditorStore(s => s.pixelation)
-  const setPixelation = useEditorStore(s => s.setPixelation)
-
-  const { blockSize, paletteStyle, posterizeLevels, ditherStrength, previewTarget } = pixelation
+  const { blockSize, paletteStyle, posterizeLevels, ditherStrength, previewTarget } = usePixelationStore()
+  const setPixelation = usePixelationStore(s => s.setPixelation)
 
   const bakeToLayer = () => {
     // Bake to active layer
@@ -266,11 +265,9 @@ function PixelationPanel({ context }: PluginPanelProps) {
 // ─── Overlay Component ───────────────────────────────────────────────────────
 
 function PixelationOverlay({ context }: PluginOverlayProps) {
-  const pixelation = useEditorStore(s => s.pixelation)
+  const { blockSize, paletteStyle, posterizeLevels, ditherStrength, previewTarget } = usePixelationStore()
   const engine = useEditorStore(s => s.engine)
-  const zoom = useEditorStore(s => s.zoom)
-
-  const { blockSize, paletteStyle, posterizeLevels, ditherStrength, previewTarget } = pixelation
+  const zoom   = useEditorStore(s => s.zoom)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {

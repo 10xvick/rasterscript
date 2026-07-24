@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { RectangleHorizontal } from 'lucide-react'
 import type { EditorPlugin, PluginPanelProps, PluginOverlayProps } from '../../core/types'
 import { useEditorStore } from '../../store/useEditorStore'
+import { useSelectionStore } from './useSelectionStore'
 
 interface Rect      { x: number; y: number; w: number; h: number }
 interface Floating  { data: ImageData; x: number; y: number; w: number; h: number }
@@ -35,10 +36,10 @@ function FloatingPreview({ data }: { data: ImageData }) {
 
 function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
   const divRef  = useRef<HTMLDivElement>(null)
-  const zoom    = useEditorStore(s => s.zoom)
-  const rect    = useEditorStore(s => s.selection.rect)
-  const floating = useEditorStore(s => s.selection.floating)
-  const setSelection = useEditorStore(s => s.setSelection)
+  const zoom         = useEditorStore(s => s.zoom)
+  const rect         = useSelectionStore(s => s.rect)
+  const floating     = useSelectionStore(s => s.floating)
+  const setSelection = useSelectionStore(s => s.setSelection)
 
   const [localRect,  setLocalRect]  = useState<Rect | null>(rect)
   const [localFloat, setLocalFloat] = useState<Floating | null>(floating)
@@ -249,10 +250,10 @@ function SelectionOverlay({ context, containerRef }: PluginOverlayProps) {
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
 function SelectionPanel({ context }: PluginPanelProps) {
-  const rect = useEditorStore(s => s.selection.rect)
-  const floating = useEditorStore(s => s.selection.floating)
-  const clipboard = useEditorStore(s => s.selection.clipboard)
-  const setSelection = useEditorStore(s => s.setSelection)
+  const rect         = useSelectionStore(s => s.rect)
+  const floating     = useSelectionStore(s => s.floating)
+  const clipboard    = useSelectionStore(s => s.clipboard)
+  const setSelection = useSelectionStore(s => s.setSelection)
 
   const [localRect, setLocalRect] = useState<Rect>({ x: 0, y: 0, w: 0, h: 0 })
   const [floatPos, setFloatPos] = useState({ x: 0, y: 0 })
@@ -448,6 +449,6 @@ export const selectionPlugin: EditorPlugin = {
   CanvasOverlay: SelectionOverlay,
   deactivate: () => {
     // Clear active selection borders and floating layers on deactivation to prevent leaking overlays
-    useEditorStore.getState().setSelection({ rect: null, floating: null })
+    useSelectionStore.getState().setSelection({ rect: null, floating: null })
   },
 }

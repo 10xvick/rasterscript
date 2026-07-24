@@ -19,6 +19,10 @@ export class EditorEngine {
   constructor(canvas: HTMLCanvasElement) {
     this._canvas = canvas
     this._ctx    = canvas.getContext('2d', { willReadFrequently: true })!
+    this._layers.onCompositeNeeded = () => {
+      this._layers.composite(this._canvas)
+      this.emit()
+    }
   }
 
   // ─── Public accessors ──────────────────────────────────────────────────────
@@ -72,7 +76,9 @@ export class EditorEngine {
 
   /** Returns the current composite as ImageData */
   getImageData(): ImageData {
-    return this._ctx.getImageData(0, 0, this._canvas.width, this._canvas.height)
+    const w = Math.max(1, Math.floor(this._canvas.width))
+    const h = Math.max(1, Math.floor(this._canvas.height))
+    return this._ctx.getImageData(0, 0, w, h)
   }
 
   /**
@@ -96,8 +102,8 @@ export class EditorEngine {
   }
 
   /** Composite layers to display canvas without pushing history */
-  composite() {
-    this._layers.composite(this._canvas)
+  composite(currentTime?: number) {
+    this._layers.composite(this._canvas, currentTime)
     this.emit()
   }
 
@@ -115,14 +121,16 @@ export class EditorEngine {
 
   // ─── Layer management API ─────────────────────────────────────────────────
 
-  addLayer(name?: string)                              { this._layers.addLayer(name);                     this._layers.composite(this._canvas); this.history.push(this._snapshot('Add Layer'));    this.emit() }
-  deleteLayer(id: string)                              { this._layers.deleteLayer(id);                    this._layers.composite(this._canvas); this.history.push(this._snapshot('Delete Layer')); this.emit() }
+  moveLayerUp(id: string)                              { this._layers.move(id, 1);                        this._layers.composite(this._canvas); this.history.push(this._snapshot('Move Layer Up'));   this.emit() }
+  moveLayerDown(id: string)                            { this._layers.move(id, -1);                       this._layers.composite(this._canvas); this.history.push(this._snapshot('Move Layer Down')); this.emit() }
+  reorderLayer(fromId: string, toId: string)          { this._layers.reorderLayer(fromId, toId);         this._layers.composite(this._canvas); this.history.push(this._snapshot('Reorder Layer'));   this.emit() }
   setActiveLayer(id: string)                           { this._layers.setActive(id);                                                                                                               this.emit() }
   moveLayer(id: string, dir: 1 | -1)                  { this._layers.move(id, dir);                      this._layers.composite(this._canvas); this.history.push(this._snapshot('Reorder'));      this.emit() }
   setLayerVisible(id: string, v: boolean)              { this._layers.setVisible(id, v);                  this._layers.composite(this._canvas);                                                    this.emit() }
   setLayerOpacity(id: string, v: number)               { this._layers.setOpacity(id, v);                  this._layers.composite(this._canvas);                                                    this.emit() }
   setLayerBlendMode(id: string, m: GlobalCompositeOperation) { this._layers.setBlendMode(id, m);          this._layers.composite(this._canvas); this.history.push(this._snapshot('Blend Mode'));  this.emit() }
   renameLayer(id: string, name: string)                { this._layers.rename(id, name);                                                                                                           this.emit() }
+  setLayerVideoProperties(id: string, props: Partial<LayerInfo>) { this._layers.setLayerVideoProperties(id, props); this._layers.composite(this._canvas); this.emit() }
   pushLayerHistory(label: string)                      {                                                  this._layers.composite(this._canvas); this.history.push(this._snapshot(label));          this.emit() }
 
   mergeDown() {
@@ -170,18 +178,34 @@ export class EditorEngine {
 
   // ─── Context factory ──────────────────────────────────────────────────────
 
+  /** Updates ONLY the active layer's ImageData without affecting or flattening other layers */
+  setActiveLayerImageData(data: ImageData, pushHistory = true, label = 'Edit') {
+    this._layers.setActiveLayerImageData(data)
+    this._layers.composite(this._canvas)
+    if (pushHistory) this.history.push(this._snapshot(label))
+    this.emit()
+  }
+
+  /** Returns ONLY the active layer's ImageData */
+  getActiveLayerImageData(): ImageData | null {
+    return this._layers.getActiveLayerImageData()
+  }
+
   getContext(): EditorContext {
     return {
       canvas:            this._canvas,
-      getImageData:      () => this.getImageData(),
-      setImageData:      (data, push = true) => this.setImageData(data, push),
+      getImageData:      () => this.getActiveLayerImageData() || this.getImageData(),
+      setImageData:      (data, push = true) => this.setActiveLayerImageData(data, push),
+      setActiveLayerImageData: (data, push = true, label = 'Edit') => this.setActiveLayerImageData(data, push, label),
+      getActiveLayerImageData: () => this.getActiveLayerImageData(),
       pushHistory:       (label) => this.pushHistory(label),
       getWidth:          () => this._canvas.width,
       getHeight:         () => this._canvas.height,
       getActiveLayerCtx: () => this._layers.getActiveCanvas()?.getContext('2d', { willReadFrequently: true }) ?? null,
-      compositeToCanvas: () => this._layers.composite(this._canvas),
+      compositeToCanvas: (currentTime?: number) => this._layers.composite(this._canvas, currentTime),
       cropDocument:      (x, y, w, h) => this.cropDocument(x, y, w, h),
       pasteAsLayer:      (data, x, y, name) => this.pasteAsLayer(data, x, y, name),
+      setLayerVideoProperties: (id, props) => this.setLayerVideoProperties(id, props),
     }
   }
 

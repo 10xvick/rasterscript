@@ -1,26 +1,39 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { StatusBar } from './StatusBar'
-import { LayoutRoot } from './LayoutEngine'
+import { LayoutProvider, LayoutRendererRoot } from './LayoutEngine'
 import { SettingsPanel } from './SettingsPanel'
+import { WorkspacePresets } from './WorkspacePresets'
 import { useEditorStore } from '../../store/useEditorStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { registry } from '../../core/PluginRegistry'
+import { registerBuiltinWidgets } from '../registerWidgets'
 
 // ─── Plugin imports ───────────────────────────────────────────────────────────
-import { cropPlugin } from '../../plugins/crop'
-import { resizePlugin } from '../../plugins/resize'
-import { doodlePlugin } from '../../plugins/doodle'
-import { rotatePlugin } from '../../plugins/rotate'
-import { flipPlugin } from '../../plugins/flip'
-import { filtersPlugin } from '../../plugins/filters'
-import { scriptPlugin } from '../../plugins/script'
-import { selectionPlugin } from '../../plugins/selection'
-import { removeBgPlugin } from '../../plugins/removebg'
-import { blurPlugin } from '../../plugins/blur'
+import { cropPlugin }        from '../../plugins/crop'
+import { resizePlugin }      from '../../plugins/resize'
+import { doodlePlugin }      from '../../plugins/doodle'
+import { rotatePlugin }      from '../../plugins/rotate'
+import { flipPlugin }        from '../../plugins/flip'
+import { filtersPlugin }     from '../../plugins/filters'
+import { scriptPlugin }      from '../../plugins/script'
+import { selectionPlugin }   from '../../plugins/selection'
+import { removeBgPlugin }    from '../../plugins/removebg'
+import { blurPlugin }        from '../../plugins/blur'
 import { spritesheetPlugin } from '../../plugins/spritesheet'
-import { pixelationPlugin } from '../../plugins/pixelation'
+import { pixelationPlugin }  from '../../plugins/pixelation'
+import { videoPlugin }       from '../../plugins/video'
 
-const PLUGINS = [selectionPlugin, cropPlugin, resizePlugin, doodlePlugin, blurPlugin, pixelationPlugin, spritesheetPlugin, rotatePlugin, flipPlugin, filtersPlugin, removeBgPlugin, scriptPlugin]
+// Importing the video plugin causes it to self-register its widget —
+// no changes to LayoutEngine.tsx needed.
+
+const PLUGINS = [
+  selectionPlugin, cropPlugin, resizePlugin, doodlePlugin, blurPlugin,
+  pixelationPlugin, spritesheetPlugin, rotatePlugin, flipPlugin,
+  filtersPlugin, removeBgPlugin, scriptPlugin, videoPlugin,
+]
+
+// Register all built-in layout widgets once — idempotent (skip if already done)
+registerBuiltinWidgets()
 
 function accentCSS(hue: number) {
   const shades: [number, number, number][] = [
@@ -49,12 +62,41 @@ function useApplyUiSettings() {
 
 export function Editor() {
   useApplyUiSettings()
-  const { refreshPlugins, setActivePlugin } = useEditorStore()
+  const { refreshPlugins, playing, duration, setTimeline, currentTime } = useEditorStore()
+  const currentTimeRef = useRef(0)
+  const durationRef = useRef(10)
 
-  // Expose store on window for plugins
+  // Keep refs in sync
   useEffect(() => {
-    ;(window as unknown as Record<string, unknown>).__editorStore = { setActivePlugin }
-  }, [setActivePlugin])
+    currentTimeRef.current = currentTime
+  }, [currentTime])
+
+  useEffect(() => {
+    durationRef.current = duration
+  }, [duration])
+
+  useEffect(() => {
+    if (!playing) return
+
+    let lastTime = performance.now()
+    let frameId: number
+
+    const tick = (now: number) => {
+      const delta = (now - lastTime) / 1000
+      lastTime = now
+
+      let nextTime = currentTimeRef.current + delta
+      if (nextTime >= durationRef.current) {
+        nextTime = 0 // loop
+      }
+      currentTimeRef.current = nextTime
+      setTimeline({ currentTime: nextTime })
+      frameId = requestAnimationFrame(tick)
+    }
+
+    frameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frameId)
+  }, [playing, setTimeline])
 
   // Register all plugins once on mount
   useEffect(() => {
@@ -87,16 +129,19 @@ export function Editor() {
   }, [])
 
   return (
-    <div className="flex flex-col w-full h-full bg-neutral-950 overflow-hidden">
-      <header className="flex items-center px-4 py-2 bg-neutral-900 border-b border-neutral-700 flex-none gap-3 select-none">
-        <span className="text-sm font-semibold text-violet-400 tracking-wide">RasterScript</span>
-        <small className="text-neutral-600 text-xs">by 10xvick</small>
-      </header>
+    <LayoutProvider>
+      <div className="flex flex-col w-full h-full bg-neutral-950 overflow-hidden">
+        <header className="flex items-center px-4 py-1.5 bg-neutral-900 border-b border-neutral-700 flex-none gap-3 select-none">
+          <span className="text-sm font-semibold text-violet-400 tracking-wide">RasterScript</span>
+          <small className="text-neutral-600 text-xs">by 10xvick</small>
+          <WorkspacePresets />
+        </header>
 
-      <LayoutRoot />
+        <LayoutRendererRoot />
 
-      <StatusBar />
-      <SettingsPanel />
-    </div>
+        <StatusBar />
+        <SettingsPanel />
+      </div>
+    </LayoutProvider>
   )
 }
